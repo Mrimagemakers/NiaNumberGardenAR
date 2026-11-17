@@ -288,6 +288,38 @@ function updateExperience(t, dt, cam) {
 }
 
 
+
+/* ---------- music: Nia's songs play softly under the book and duck under narration ---------- */
+const SONGS = [{ file: 'music/number-garden.mp3', title: 'Number Garden' }, { file: 'music/rocket-ship.mp3', title: 'Rocket Ship to Number Land' }];
+const bgm = new Audio(); bgm.preload = 'none'; let song = 0, musicOn = true, musicVol = 0.32;
+try { musicOn = localStorage.getItem('nia-music') !== 'off'; } catch (e) { }
+function loadSong(i) { song = (i + SONGS.length) % SONGS.length; bgm.src = SONGS[song].file; $('songname').textContent = SONGS[song].title; }
+bgm.addEventListener('ended', () => { loadSong(song + 1); if (musicOn) bgm.play().catch(() => { }); });
+function setMusic(on) { musicOn = on; $('musicbtn').setAttribute('aria-pressed', on); try { localStorage.setItem('nia-music', on ? 'on' : 'off'); } catch (e) { }
+  if (on) { if (!bgm.src) loadSong(0); bgm.play().catch(() => { }); toast('♪ Now playing: ' + SONGS[song].title); } else bgm.pause(); }
+function nextSong() { loadSong(song + 1); if (musicOn) bgm.play().catch(() => { }); toast('♪ Now playing: ' + SONGS[song].title); }
+function duckMusic(dt) { const talking = (window.speechSynthesis && speechSynthesis.speaking) || (video && !video.paused); const target = !sound.on ? 0 : talking ? musicVol * 0.25 : musicVol; bgm.volume += (target - bgm.volume) * Math.min(1, dt * 4); }
+
+/* ---------- social and share ---------- */
+// Add each channel's link here; channels with an empty url are hidden.
+const SOCIAL = [
+  { name: 'Instagram', url: '' }, { name: 'TikTok', url: '' }, { name: 'YouTube', url: '' }, { name: 'Facebook', url: '' },
+  { name: 'PenGame Publishing', url: 'https://www.pengamepublishing.com' },
+  { name: 'Get the book on Amazon', url: 'https://www.amazon.com/Number-Garden-Bright-Minds-Explorers/dp/B0GDCNBFYL/' },
+];
+const SITE_URL = 'https://mrimagemakers.github.io/NiaNumberGardenAR/';
+async function shareBook() {
+  const data = { title: 'Nia & the Number Garden AR Book', text: 'Read, play and explore the Number Garden in 3D and AR!', url: SITE_URL };
+  try { if (navigator.share) { await navigator.share(data); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(SITE_URL); toast('Link copied! Paste it anywhere to share.'); } catch (e) { showSheet('Share the book', 'Copy this link: <b>' + SITE_URL + '</b>'); }
+}
+function socialSheet() {
+  const live = SOCIAL.filter(s => s.url);
+  showSheet('Follow & share', live.map(s => `<a class="go" style="margin:0 6px 8px 0" href="${s.url}" target="_blank" rel="noopener">${s.name}</a>`).join('') +
+    `<br><button class="go" id="sharebtn2" style="border:0;margin-top:4px">Share this book</button>`);
+  const b = document.getElementById('sharebtn2'); if (b) b.onclick = shareBook;
+}
+
 /* ---------- in-AR media bar: videos, games, links, replay ---------- */
 const VIDEO = { cover: 'gate', welcome: 'gwenda', map: 'character', butterfly: 'flowers', gate: 'gate', friends: 'gate', bridge: 'flowers', carlo: 'count10',
   subby: 'snail', shapes: 'greenhouse', bloom: 'flowers', milly: 'moth', everywhere: 'character', pattern: 'flowers', measure: 'flowers', time: 'gwenda',
@@ -305,7 +337,7 @@ const GAMES = [
 const LINKS = [
   { page: 49, title: 'Activity Hub', sub: 'Games, read-alongs and activities for every chapter', url: HUB },
   { page: 48, title: 'Coloring & Workbook', sub: 'The companion coloring and workbook flipbook', url: 'https://heyzine.com/flip-book/8b4e688d51.html' },
-  { page: 61, title: 'Get the Book', sub: 'Find Nia & the Number Garden on Amazon', url: 'https://www.amazon.com/s?k=Nia+and+the+Number+Garden+Darnell+Clark' },
+  { page: 61, title: 'Get the Book', sub: 'Find Nia & the Number Garden on Amazon', url: 'https://www.amazon.com/Number-Garden-Bright-Minds-Explorers/dp/B0GDCNBFYL/' },
   { page: 4, title: 'PenGame Publishing', sub: 'More books from Bright Minds Explorers', url: 'https://www.pengamepublishing.com' },
 ];
 function openLink(item) {
@@ -338,8 +370,10 @@ function addMediaBar(host, key, spread) {
   if (VIDEO[key]) items.push(['▶ Watch', () => playClip(VIDEO[key])]);
   items.push(['Games', () => cards(GAMES, 'Tap a game to play')]);
   items.push(['Links', () => cards(LINKS, 'Tap to open')]);
+  items.push(['♪ Music', () => { if (!musicOn) setMusic(true); else nextSong(); }]);
+  items.push(['Follow', () => socialSheet()]);
   items.push(['↺ Replay', () => { clearPanel(); startExperience(host.parent, spread); }]);
-  const W = 0.36; items.forEach(([t, f], i) => btn(t, (i - (items.length - 1) / 2) * W, f, i === 0 && VIDEO[key] ? '#ffd23f' : '#ffffff'));
+  const W = 0.33; items.forEach(([t, f], i) => btn(t, (i - (items.length - 1) / 2) * W, f, i === 0 && VIDEO[key] ? '#ffd23f' : '#ffffff'));
   function cards(list, title) {
     clearPanel();
     const g = new THREE.Group(); g.position.set(0, 0.5, 0.15); g.userData.billboard = true; panel.add(g);
@@ -537,6 +571,9 @@ $('look').onclick = () => { // swing the camera overhead to read the printed pag
 };
 $('snd').onclick = () => { sound.on = !sound.on; $('snd').setAttribute('aria-pressed', sound.on); if (!sound.on) stopSpeech(); };
 $('map').onclick = () => setCur(3);
+$('musicbtn').onclick = () => setMusic(!musicOn);
+$('songname').onclick = () => nextSong();
+$('follow').onclick = socialSheet;
 $('games').onclick = () => { const all = [...GAMES, ...LINKS.filter(l => l.title !== "Activity Hub")];
   $('sheet-a').style.display = 'none';
   showSheet('Games & links', all.map(g => `<a class="go" style="margin:0 6px 8px 0" href="${g.url}" target="_blank" rel="noopener">${g.title}</a>`).join('') + '<br><small>Inside the book, tap Games or Links under any pop-up.</small>'); };
@@ -572,7 +609,7 @@ const clock = new THREE.Clock();
 renderer.setAnimationLoop((time, frame) => {
   const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
   if (mode === 'scan') return;
-  updateTweens(dt); layoutSheets(dt);
+  updateTweens(dt); layoutSheets(dt); duckMusic(dt);
   book.position.x = bookShift.x; boardL.visible = cur > 0; boardR.visible = cur < SHEETS; updateBlocks();
   if (world.userData.grass) world.userData.grass.userData.tick(t);
   if (world.userData.clouds) world.userData.clouds.forEach(c => { c.position.x += c.userData.drift * dt; if (c.position.x > 24) c.position.x = -24; });
@@ -601,7 +638,7 @@ renderer.setAnimationLoop((time, frame) => {
   cur = start; bookShift.x = cur === 0 ? -0.5 : cur === SHEETS ? 0.5 : 0;
   refreshTextures(); updateUI(); layoutSheets(0);
   $('loading').classList.add('done');
-  $('start').onclick = () => { sfx.unlock(); $('loading').remove(); startExperience(); };
+  $('start').onclick = () => { sfx.unlock(); $('loading').remove(); startExperience(); loadSong(0); bgm.volume = 0; if (musicOn) setMusic(true); $('musicbtn').setAttribute('aria-pressed', musicOn); };
   $('start').disabled = false; $('start').textContent = 'Open the book';
 })();
 }

@@ -33,6 +33,9 @@ button{font:inherit;cursor:pointer;border:0}
 .ib{width:44px;height:44px;border-radius:50%;background:#fff;color:var(--purple);display:grid;place-items:center;box-shadow:0 3px 0 rgba(60,19,97,.25);pointer-events:auto}
 .ib svg{width:22px;height:22px}
 .ib[aria-pressed=false]{opacity:.55}
+.musicpill{pointer-events:auto;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--green);color:#fff;box-shadow:0 3px 0 #146c3a}.musicpill svg{width:20px;height:20px}.musicpill[aria-pressed=false]{background:#fff;color:var(--purple);opacity:.6}
+.songname{pointer-events:auto;background:#fff;color:var(--green);font-weight:700;font-size:13px;border-radius:999px;padding:0 12px;height:32px;margin-left:-8px;box-shadow:0 3px 0 rgba(60,19,97,.2);white-space:nowrap;max-width:190px;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:600px){.songname{display:none}}
 button:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
 #exptitle{position:absolute;top:calc(max(10px,env(safe-area-inset-top)) + 58px);left:12px;background:var(--gold);color:var(--deep);font-weight:700;padding:6px 16px;border-radius:999px;font-size:15px;white-space:nowrap;box-shadow:0 3px 0 #c99a00;pointer-events:none}
 #exptitle:empty{display:none}
@@ -105,6 +108,8 @@ body.scanning .tools,body.scanning .pager,body.xr-vr #ui{display:none}
     <div class="brand"><b>8</b><div><span>Nia &amp; the Number Garden</span><small>Deluxe AR Book · by Darnell Clark</small></div></div>
     <div class="spacer"></div>
     <div class="pill" title="Chapter stars collected"><svg viewBox="0 0 24 24" fill="#ffb703"><path d="M12 2l3 6.6 7.2.8-5.4 4.9 1.5 7.1L12 17.8 5.7 21.4l1.5-7.1L1.8 9.4 9 8.6z"/></svg><span id="starcount">0</span>/18</div>
+    <button class="musicpill" id="musicbtn" aria-pressed="true" aria-label="Music on or off"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 17.5a3 3 0 1 1-2-2.83V5l11-2v11.5a3 3 0 1 1-2-2.83V7.2L9 8.6z"/></svg></button><button class="songname" id="songname" title="Next song">Number Garden</button>
+    <button class="ib" id="follow" aria-label="Follow and share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.8l7.4-4.4M8.3 13.2l7.4 4.4"/></svg></button>
     <button class="ib" id="snd" aria-pressed="true" aria-label="Sound and voice on or off"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg></button>
   </div>
   <div id="exptitle"></div>

@@ -590,7 +590,7 @@ export const EXPERIENCES = {
     const cover = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.36, 0.04), [0, 1, 2, 3, 4, 5].map(i => i === 4 ? new THREE.MeshStandardMaterial({ map: ctx.coverTex }) : new THREE.MeshStandardMaterial({ color: i === 0 ? '#fffaf0' : '#5a189a' })));
     cover.position.y = 0.2; cover.rotation.x = -0.15; cover.castShadow = true; book.add(cover); popIn(book, 0.3);
     const btn = label('Get the Book', { size: 0.055, bg: '#ffd23f' }); btn.position.set(0.38, 0.5, 0.05); ctx.root.add(btn);
-    const go = () => ctx.openLink({ title: 'Get the Book', sub: 'Find Nia & the Number Garden on Amazon', url: 'https://www.amazon.com/s?k=Nia+and+the+Number+Garden+Darnell+Clark' });
+    const go = () => ctx.openLink({ title: 'Get the Book', sub: 'Find Nia & the Number Garden on Amazon', url: 'https://www.amazon.com/Number-Garden-Bright-Minds-Explorers/dp/B0GDCNBFYL/' });
     tappable(btn, go); tappable(book, go);
     ctx.onUpdate((t) => { book.rotation.y = Math.sin(t * 0.8) * 0.4; });
   }),
