@@ -299,6 +299,8 @@ const GAMES = [
   { page: 51, title: "Addie's Tool Slice Math Dash", sub: 'Slice tools that make the target', url: HUB, inBook: 24 },
   { page: 52, title: "Nia's Bloom & Sum", sub: 'Grow flowers, solve math', url: HUB, inBook: 25 },
   { page: 49, title: "Nia's Learning Hub", sub: 'Stories, videos, music, academy', url: HUB },
+  { page: 8, title: "Nia's VR World", sub: 'Explore the Magic Number Garden in 3D and VR', url: 'https://mrimagemakers.github.io/NiasVRWorld/' },
+  { page: 6, title: 'Bright Minds Explorers World', sub: 'K–5 learning world with 17 Number Garden games', url: 'https://mrimagemakers.github.io/brightmindsacademy/' },
 ];
 const LINKS = [
   { page: 49, title: 'Activity Hub', sub: 'Games, read-alongs and activities for every chapter', url: HUB },
@@ -342,8 +344,9 @@ function addMediaBar(host, key, spread) {
     clearPanel();
     const g = new THREE.Group(); g.position.set(0, 0.5, 0.15); g.userData.billboard = true; panel.add(g);
     const h = labelSprite(title, '#5a189a', '#ffffff'); h.position.set(0, 0.32, 0); g.add(h);
+    const cols = Math.min(4, list.length);
     list.forEach((it, i) => {
-      const c = new THREE.Group(); c.position.set((i - (list.length - 1) / 2) * 0.36, 0, 0);
+      const c = new THREE.Group(); const row = Math.floor(i / cols), inRow = Math.min(cols, list.length - row * cols); c.position.set((i % cols - (inRow - 1) / 2) * 0.36, -row * 0.62, 0);
       const img = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.32), new THREE.MeshBasicMaterial({ map: pageThumb(it.page) })); c.add(img);
       const border = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.34), new THREE.MeshBasicMaterial({ color: '#ffd23f' })); border.position.z = -0.002; c.add(border);
       const cap = labelSprite(it.title.length > 18 ? it.title.slice(0, 17) + '…' : it.title, '#ffffff', '#3c1361', 0.032); cap.position.set(0, -0.21, 0.01); c.add(cap);
@@ -351,7 +354,8 @@ function addMediaBar(host, key, spread) {
       if (it.inBook) { const pb = labelSprite('Play here', '#1f9d55', '#ffffff', 0.032); pb.position.set(0, -0.27, 0.01); pb.userData.onTap = () => setCur(it.inBook); c.add(pb); }
       c.scale.setScalar(0.01); setTimeout(() => tween(c.scale, { x: 1, y: 1, z: 1 }, 0.45, 'outBack'), i * 80); g.add(c);
     });
-    const x = labelSprite('✕ Close', '#ffd23f'); x.position.set(0, -0.36, 0.01); x.userData.onTap = clearPanel; g.add(x);
+    const x = labelSprite('✕ Close', '#ffd23f'); x.position.set(0, -0.36 - Math.floor((list.length - 1) / cols) * 0.62, 0.01); x.userData.onTap = clearPanel; g.add(x);
+    if (list.length > cols) g.position.y += 0.31;
   }
 }
 function labelSprite(text, bg = '#ffffff', fg = '#3c1361', size = 0.056) {

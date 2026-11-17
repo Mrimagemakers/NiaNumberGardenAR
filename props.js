@@ -455,3 +455,67 @@ export function makeSubbyHD2() {
   g.userData.idle = (t) => { head.rotation.z = Math.sin(t * 1.2) * 0.06; head.rotation.y = Math.sin(t * 0.8) * 0.15; foot.scale.x = 1 + Math.sin(t * 2) * 0.02; };
   return g;
 }
+
+/* ---------- The Division Fountain: three stone tiers, a golden ÷ crown, equal water streams that divide ---------- */
+export function makeDivisionFountain() {
+  const g = new THREE.Group();
+  const stoneT = canvasTex(256, 256, (c) => { c.fillStyle = '#e8e1d6'; c.fillRect(0, 0, 256, 256); for (let i = 0; i < 2200; i++) { c.fillStyle = `rgba(${Math.random() < 0.5 ? '150,140,128' : '255,255,250'},${Math.random() * 0.18})`; c.fillRect(Math.random() * 256, Math.random() * 256, 2, 2); }
+    c.strokeStyle = 'rgba(140,128,112,.35)'; c.lineWidth = 2; for (let y = 0; y < 256; y += 64) { c.beginPath(); c.moveTo(0, y); c.lineTo(256, y); c.stroke(); } });
+  stoneT.wrapS = stoneT.wrapT = THREE.RepeatWrapping; stoneT.repeat.set(4, 1);
+  const stone = new THREE.MeshPhysicalMaterial({ map: stoneT, roughness: 0.55, clearcoat: 0.3 });
+  const gold = new THREE.MeshStandardMaterial({ color: '#ffc300', metalness: 0.9, roughness: 0.2, emissive: '#7a5200', emissiveIntensity: 0.25 });
+  const lathe = (pts, seg = 48) => new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), seg);
+  // pool, pedestal, middle bowl, top bowl
+  g.add(mesh(lathe([[0, 0], [0.26, 0], [0.27, 0.01], [0.27, 0.06], [0.285, 0.065], [0.285, 0.08], [0.255, 0.08], [0.25, 0.03], [0, 0.03]]), stone));
+  g.add(mesh(lathe([[0.05, 0.03], [0.045, 0.06], [0.03, 0.09], [0.028, 0.2], [0.036, 0.215], [0.03, 0.23]], 32), stone));
+  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; const f = mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.11, 6), stone, Math.cos(a) * 0.029, 0.145, Math.sin(a) * 0.029); g.add(f); }
+  g.add(mesh(lathe([[0, 0.22], [0.06, 0.22], [0.13, 0.245], [0.155, 0.27], [0.16, 0.285], [0.15, 0.285], [0.125, 0.262], [0, 0.255]]), stone));
+  g.add(mesh(lathe([[0.022, 0.285], [0.018, 0.33], [0.024, 0.345]], 24), stone));
+  g.add(mesh(lathe([[0, 0.345], [0.03, 0.345], [0.065, 0.36], [0.075, 0.375], [0.068, 0.378], [0, 0.37]]), stone));
+  // gold trim bands
+  for (const [r, y] of [[0.285, 0.08], [0.16, 0.285], [0.075, 0.376]]) { const t = mesh(new THREE.TorusGeometry(r, 0.005, 8, 64), gold, 0, y, 0); t.rotation.x = Math.PI / 2; g.add(t); }
+  // golden ÷ crown
+  const div = new THREE.Group(); div.position.y = 0.45; g.add(div);
+  div.add(mesh(new RoundedBoxGeometry(0.09, 0.016, 0.016, 3, 0.006), gold));
+  div.add(mesh(new THREE.SphereGeometry(0.014, 20, 14), gold, 0, 0.032, 0)); div.add(mesh(new THREE.SphereGeometry(0.014, 20, 14), gold, 0, -0.032, 0));
+  g.add(mesh(new THREE.CylinderGeometry(0.006, 0.01, 0.06, 10), gold, 0, 0.395, 0));
+  // water surfaces with expanding ripple rings
+  const waterM = new THREE.MeshPhysicalMaterial({ color: '#4cc9f0', roughness: 0.05, metalness: 0.1, clearcoat: 1, transparent: true, opacity: 0.85, emissive: '#0a6fa0', emissiveIntensity: 0.15 });
+  const surfaces = [[0.25, 0.07], [0.145, 0.275], [0.06, 0.372]];
+  const ripples = [];
+  surfaces.forEach(([r, y]) => { const w = new THREE.Mesh(new THREE.CircleGeometry(r, 48).rotateX(-Math.PI / 2), waterM); w.position.y = y; g.add(w);
+    for (let k = 0; k < 3; k++) { const rg = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.4, depthWrite: false })); rg.position.y = y + 0.001; g.add(rg); ripples.push({ rg, r, ph: k / 3 }); } });
+  // droplet streams as one particle system
+  const MAXS = 12, PER = 46, SPILL = 16, SPER = 14, JET = 30;
+  const total = MAXS * PER + SPILL * SPER + JET;
+  const pos = new Float32Array(total * 3), geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const dropT = canvasTex(64, 64, (c) => { const gr = c.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(190,240,255,.9)'); gr.addColorStop(1, 'rgba(120,210,255,0)'); c.fillStyle = gr; c.fillRect(0, 0, 64, 64); });
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.022, map: dropT, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: '#bff0ff' }));
+  pts.frustumCulled = false; g.add(pts);
+  let streams = 4, shown = 4, dance = 0;
+  g.userData.setStreams = (n) => { streams = Math.max(1, Math.min(MAXS, n)); };
+  g.userData.dance = () => { dance = 3; };
+  g.userData.update = (t, dt) => {
+    shown += (streams - shown) * Math.min(1, dt * 3); dance = Math.max(0, dance - dt);
+    let i = 0; const set = (x, y, z) => { pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z; i++; };
+    const n = Math.round(shown), boost = 1 + (dance > 0 ? 0.35 * Math.sin(t * 6) + 0.3 : 0);
+    // equal arcs from the crown into the middle bowl
+    for (let s = 0; s < MAXS; s++) for (let p = 0; p < PER; p++) {
+      if (s >= n) { set(0, -99, 0); continue; }
+      const a = s / n * Math.PI * 2 + t * 0.15, age = ((t * 0.9 + p / PER + s * 0.13) % 1) * 0.55;
+      const vh = 0.24 * boost, vy = 0.32 * boost, x = Math.cos(a) * vh * age, z = Math.sin(a) * vh * age, y = 0.41 + vy * age - 1.6 * age * age;
+      set(x, Math.max(0.28, y), z);
+    }
+    // sheets spilling over the middle bowl into the pool (also equal shares)
+    for (let s = 0; s < SPILL; s++) for (let p = 0; p < SPER; p++) {
+      const a = s / SPILL * Math.PI * 2, age = ((t * 1.1 + p / SPER + s * 0.37) % 1) * 0.28;
+      const r = 0.16 + age * 0.12; set(Math.cos(a) * r, 0.28 - 1.8 * age * age, Math.sin(a) * r);
+    }
+    // central bubbling jet
+    for (let p = 0; p < JET; p++) { const age = ((t * 1.4 + p / JET) % 1); set((Math.random() - 0.5) * 0.008, 0.47 + Math.sin(age * Math.PI) * 0.06 * boost, (Math.random() - 0.5) * 0.008); }
+    geo.attributes.position.needsUpdate = true;
+    ripples.forEach(({ rg, r, ph }) => { const k = (t * 0.5 + ph) % 1; rg.scale.setScalar(r * (0.2 + k * 0.8)); rg.material.opacity = 0.45 * (1 - k); });
+    div.rotation.y = t * 0.6;
+  };
+  return g;
+}

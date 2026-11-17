@@ -1,7 +1,7 @@
 // The AR experiences — one per chapter, following the "AR Experience" column of the book's table of contents.
 import * as THREE from 'three';
 import { makeMushroom, makeBush, makeRock } from './garden.js';
-import { makeShapeBloom, makePot, makeGreenhouse, makeSwingSet, makeSun, makeKite, makeFlowerClock, makeBed, makeChalkboardEasel, makeMarketStall } from './props.js';
+import { makeDivisionFountain, makeShapeBloom, makePot, makeGreenhouse, makeSwingSet, makeSun, makeKite, makeFlowerClock, makeBed, makeChalkboardEasel, makeMarketStall } from './props.js';
 import {
   PAL, NUM_COLORS, toon, glowMat, sph, cyl, box, label, chip, num3D, makeNia, makeAddie, makeFreddy, makeCarlo,
   makeSubby, makeMilly, makeButterfly8, makeSkippy, makeGwenda, makeHeart, makeFlower, makeTree, makeGate, makeLily,
@@ -129,8 +129,9 @@ export const EXPERIENCES = {
     let count = 0;
     for (let i = 0; i < 3; i++) {
       const st = label('★', { bg: null, fg: '#ffd23f', size: 0.16 }); st.position.set(-0.45 + i * 0.45, 0.55 + (i % 2) * 0.12, 0.1); ctx.root.add(st); popIn(st, 0.3 + i * 0.1);
-      tappable(st, () => { if (st.userData.t) return; st.userData.t = 1; count++; ctx.speak(String(count)); sfx.note(count * 2); ctx.fx.emit(wpos(st), '#ffd23f', 40, 0.5); remove(st, 0.2);
-        if (count === 3) ctx.say("One, two, three! The magic is awake. I'm Gwenda — every page with a sparkle has a surprise. Turn the page!"); });
+      tappable(st, () => { if (st.userData.t) return; st.userData.t = 1; count++; const n = count; sfx.note(n * 2); ctx.fx.emit(wpos(st), '#ffd23f', 40, 0.5); remove(st, 0.2);
+        if (n < 3) ctx.speak(['One!', 'Two!'][n - 1]);
+        else ctx.say("Three! The magic is awake. I'm Gwenda. Every page with a sparkle has a surprise. Turn the page!"); });
     }
     ctx.onUpdate(t => gw.userData.idle(t));
     ctx.say('Hi, I am Gwenda the fairy! Tap the three stars to wake up the book magic.');
@@ -293,7 +294,8 @@ export const EXPERIENCES = {
 
   bloom: { title: 'Watch the Garden Come to Life', build(ctx) {
     grass(ctx, 1.8, 0.9);
-    const fountain = new THREE.Group(); fountain.add(cyl(0.14, 0.16, 0.06, '#b8c0c8', 0, 0.03, 0)); fountain.add(cyl(0.03, 0.03, 0.2, '#b8c0c8', 0, 0.13, 0)); fountain.position.set(0, 0.02, -0.2); ctx.root.add(fountain); popIn(fountain);
+    const fountain = makeDivisionFountain(); fountain.position.set(0, 0.02, -0.22); ctx.root.add(fountain); popIn(fountain); ctx.onUpdate((t, dt) => fountain.userData.update(t, dt));
+    const fsign = label('Division Fountain', { size: 0.04, bg: '#ffffff' }); fsign.position.set(0, 0.6, -0.22); ctx.root.add(fsign);
     const trees = [-0.6, 0.6].map(x => { const t = place(makeTree(0.45), x, 0.02, -0.22, 1); ctx.root.add(t); popIn(t); return t; });
     let grown = 0, flowing = false;
     for (let i = 0; i < 10; i++) {
@@ -301,12 +303,12 @@ export const EXPERIENCES = {
       const mound = sph(0.045, '#7a4a1e', x, 0.02, z); mound.scale.y = 0.4; ctx.root.add(mound); popIn(mound, i * 0.04);
       tappable(mound, () => { if (mound.userData.g) return; mound.userData.g = 1; grown++;
         const f = makeFlower(NUM_COLORS[i], 0.16 + Math.random() * 0.06); f.position.set(x, 0.02, z); ctx.root.add(f); popIn(f);
-        ctx.speak(String(grown)); sfx.note(grown - 1); ctx.fx.emit(new THREE.Vector3(x, 0.15, z), NUM_COLORS[i], 20, 0.3);
+        ctx.speak(String(grown)); sfx.note(grown - 1); fountain.userData.setStreams(Math.min(12, 2 + grown)); ctx.fx.emit(new THREE.Vector3(x, 0.15, z), NUM_COLORS[i], 20, 0.3);
         const t = trees[grown % 2], spot = t.userData.fruitSpots[Math.floor(grown / 2) % 8]; const fr = sph(0.03, '#ef233c', spot.x, spot.y, spot.z + 0.05); t.add(fr); popIn(fr);
-        if (grown === 10) { flowing = true; const ten = num3D('10', '#ffd23f', 0.28); ten.position.set(0, 0.75, -0.1); ctx.root.add(ten); popIn(ten, 0.4); finish(ctx, 7, 'Ten flowers! The Division Fountain danced and the butterflies formed a glowing ten in the sky.'); }
+        if (grown === 10) { flowing = true; fountain.userData.setStreams(10); fountain.userData.dance(); const eq = label('10 streams shared by 2 bowls: 10 ÷ 2 = 5', { size: 0.04 }); eq.position.set(0, 0.68, -0.1); setTimeout(() => ctx.alive && (ctx.root.add(eq), popIn(eq)), 1200); const ten = num3D('10', '#ffd23f', 0.28); ten.position.set(0, 0.75, -0.1); ctx.root.add(ten); popIn(ten, 0.4); finish(ctx, 7, 'Ten flowers! The Division Fountain danced and the butterflies formed a glowing ten in the sky.'); }
       });
     }
-    ctx.onUpdate(() => { if (flowing && Math.random() < 0.8) ctx.fx.emit(new THREE.Vector3(0, 0.26, -0.2), '#4cc9f0', 3, 0.35, -1.2, 1); });
+  
     ctx.say('Every problem Nia solved made the garden bloom brighter. Tap the ten seeds to grow ten flowers!');
   } },
 
