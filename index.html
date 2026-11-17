@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Nia & the Number Garden AR Book</title>
+<meta name="description" content="The Deluxe Edition of Nia & the Number Garden as a living 3D, AR and VR book with a math adventure on every chapter.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: a joyful picture book for 4–8 year olds and the grown-ups reading with them
+   IDEA: a real pop-up book on a garden table — every chapter's math adventure springs off the page
+   PICTURE: the 3D book itself, full screen, with characters and numbers popping up
+   COLOUR and TYPE: book purple #5a189a, garden green #1f9d55, sunshine gold #ffd23f; Fredoka throughout
+   LAYOUT: book fills the screen; a floating story bubble and one rounded dock at the bottom, stacked on phones */
+:root{color-scheme:light;--purple:#5a189a;--deep:#3c1361;--gold:#ffd23f;--green:#1f9d55;--ink:#2b1048;--paper:#fffaf0}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0;height:100%;overflow:hidden;background:#bdf0ff;font:16px/1.4 Fredoka,system-ui,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;touch-action:none}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:1}
+#camvid{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;display:none}
+body.camera #camvid{display:block}
+#ui{position:fixed;inset:0;z-index:5;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+#ui>*{pointer-events:auto}
+.top{position:absolute;top:max(10px,env(safe-area-inset-top));left:12px;right:12px;display:flex;align-items:center;gap:10px;pointer-events:none}
+.brand{pointer-events:auto;display:flex;align-items:center;gap:10px;background:var(--purple);color:#fff;border-radius:999px;padding:6px 16px 6px 6px;box-shadow:0 4px 0 var(--deep)}
+.brand b{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--gold);color:var(--purple);font-size:22px}
+.brand span{font-weight:700;font-size:17px;white-space:nowrap}
+.brand small{display:block;font-weight:500;font-size:12px;opacity:.85;margin-top:-3px}
+.spacer{flex:1}
+.pill{pointer-events:auto;display:flex;align-items:center;gap:6px;background:#fff;border-radius:999px;padding:8px 14px;font-weight:700;color:var(--purple);box-shadow:0 3px 0 rgba(60,19,97,.25)}
+.pill svg{width:20px;height:20px}
+button{font:inherit;cursor:pointer;border:0}
+.ib{width:44px;height:44px;border-radius:50%;background:#fff;color:var(--purple);display:grid;place-items:center;box-shadow:0 3px 0 rgba(60,19,97,.25);pointer-events:auto}
+.ib svg{width:22px;height:22px}
+.ib[aria-pressed=false]{opacity:.55}
+button:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+#exptitle{position:absolute;top:calc(max(10px,env(safe-area-inset-top)) + 58px);left:12px;background:var(--gold);color:var(--deep);font-weight:700;padding:6px 16px;border-radius:999px;font-size:15px;white-space:nowrap;box-shadow:0 3px 0 #c99a00;pointer-events:none}
+#exptitle:empty{display:none}
+.dock{position:absolute;left:50%;bottom:max(12px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;width:min(760px,calc(100% - 20px))}
+.pager{display:flex;align-items:center;gap:10px;background:var(--purple);border-radius:999px;padding:6px;box-shadow:0 4px 0 var(--deep)}
+.pager button{width:48px;height:48px;border-radius:50%;background:var(--gold);color:var(--deep);display:grid;place-items:center}
+.pager button:disabled{opacity:.35;cursor:default}
+.pager svg{width:24px;height:24px}
+#pg{color:#fff;font-weight:700;min-width:120px;text-align:center;font-size:16px}
+.tools{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;background:rgba(255,255,255,.92);backdrop-filter:blur(6px);border-radius:24px;padding:6px;box-shadow:0 3px 0 rgba(60,19,97,.2)}
+.tools button{display:flex;align-items:center;gap:6px;height:44px;padding:0 12px;border-radius:999px;background:transparent;color:var(--purple);font-weight:600;font-size:15px}
+.tools button:hover{background:#f3e8ff}
+.tools button[aria-pressed=true]{background:var(--purple);color:#fff}
+.tools button:disabled{opacity:.4}
+.tools button.dim{opacity:.6}
+.tools button.xr{background:var(--green);color:#fff}
+.tools button.xr.dim{background:#9dbfa8}
+.tools svg{width:20px;height:20px;flex:none}
+#bubble{position:relative;margin-bottom:10px;transform:translateY(16px);opacity:0;transition:.3s;width:min(500px,100%);display:none;font-size:17px;background:var(--paper);border:4px solid var(--purple);border-radius:24px;padding:14px 48px 14px 18px;font-size:18px;font-weight:500;box-shadow:0 6px 0 rgba(60,19,97,.3);pointer-events:none}
+#bubble.show{display:block;opacity:1;transform:none;pointer-events:auto}
+#bubble::after{content:"";position:absolute;bottom:-16px;left:40px;border:12px solid transparent;border-top-color:var(--purple)}
+#bubble-x{position:absolute;top:6px;right:6px;width:36px;height:36px;border-radius:50%;background:#f3e8ff;color:var(--purple);font-size:20px}
+#toast{position:absolute;top:calc(max(10px,env(safe-area-inset-top)) + 100px);left:50%;transform:translate(-50%,-10px);opacity:0;transition:.3s;background:var(--green);color:#fff;font-weight:700;padding:10px 18px;border-radius:999px;pointer-events:none;white-space:nowrap}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#sheet{position:fixed;inset:0;z-index:20;display:none;place-items:center;background:rgba(43,16,72,.45);padding:20px}
+#sheet.show{display:grid}
+#sheet>div{background:var(--paper);border-radius:28px;padding:24px 24px 20px;max-width:440px;border:4px solid var(--purple);box-shadow:0 8px 0 var(--deep)}
+#sheet h2{margin:0 0 8px;color:var(--purple);font-size:26px;line-height:1.1}
+#sheet p{margin:0 0 16px;font-size:17px}
+#sheet .sheet-btns{display:flex;gap:10px;flex-wrap:wrap}#sheet small{opacity:.7}
+.go{display:inline-flex;align-items:center;background:var(--green);color:#fff;font-weight:700;border-radius:999px;padding:12px 22px;min-height:44px;text-decoration:none}
+#sheet-x{background:var(--gold);color:var(--deep);font-weight:700;border-radius:999px;padding:12px 22px;min-height:44px}
+#scan{position:fixed;inset:0;z-index:4;display:none;background:#000}
+#scan video{object-fit:cover}
+#exitscan{position:fixed;z-index:30;top:max(12px,env(safe-area-inset-top));right:12px;display:none;background:var(--gold);color:var(--deep);font-weight:700;border-radius:999px;padding:12px 18px}
+body.scanning #exitscan{display:block}
+body.scanning .tools,body.scanning .pager,body.xr-vr #ui{display:none}
+#loading{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:linear-gradient(160deg,#7b2cbf,#3c1361);color:#fff;padding:24px;text-align:center}
+#loading .card{display:grid;gap:18px;justify-items:center;max-width:420px}
+#loading img{width:min(300px,70vw);aspect-ratio:1;border-radius:18px;box-shadow:0 14px 0 rgba(0,0,0,.25),0 0 0 6px var(--gold);animation:bob 3s ease-in-out infinite}
+#loading h1{margin:0;font-size:clamp(28px,6vw,40px);line-height:1.05}
+#loading p{margin:0;opacity:.9;font-size:17px}
+#start{background:var(--gold);color:var(--deep);font-weight:700;font-size:20px;border-radius:999px;padding:16px 30px;min-height:56px;box-shadow:0 5px 0 #c99a00}
+#start:disabled{opacity:.7}
+@keyframes bob{50%{transform:translateY(-8px) rotate(-1.5deg)}}
+@media (prefers-reduced-motion:reduce){#loading img{animation:none}}
+@media (max-width:1100px){.tools button.xr span{display:none}}
+@media (max-width:600px){
+  .brand span{font-size:15px}.brand small{display:none}
+  .tools button span{display:none}.tools button{padding:0 12px}
+  #bubble{font-size:16px}
+  #exptitle{font-size:13px;max-width:calc(100% - 24px);overflow:hidden;text-overflow:ellipsis}
+}
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<video id="camvid" playsinline muted></video>
+<canvas id="c" aria-label="3D pop-up book of Nia and the Number Garden"></canvas>
+<div id="scan"></div>
+<button id="exitscan">Back to the book</button>
+
+<div id="ui">
+  <div class="top">
+    <div class="brand"><b>8</b><div><span>Nia &amp; the Number Garden</span><small>Deluxe AR Book · by Darnell Clark</small></div></div>
+    <div class="spacer"></div>
+    <div class="pill" title="Chapter stars collected"><svg viewBox="0 0 24 24" fill="#ffb703"><path d="M12 2l3 6.6 7.2.8-5.4 4.9 1.5 7.1L12 17.8 5.7 21.4l1.5-7.1L1.8 9.4 9 8.6z"/></svg><span id="starcount">0</span>/18</div>
+    <button class="ib" id="snd" aria-pressed="true" aria-label="Sound and voice on or off"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg></button>
+  </div>
+  <div id="exptitle"></div>
+  <div id="toast"></div>
+  <div class="dock">
+    <div id="bubble" role="status" aria-live="polite"><span id="say"></span><button id="bubble-x" aria-label="Close">×</button></div>
+    <div class="pager">
+      <button id="prev" aria-label="Previous page"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 4.5 7 12l8.5 7.5z"/></svg></button>
+      <div id="pg">Cover</div>
+      <button id="next" aria-label="Next page"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.5 4.5 17 12l-8.5 7.5z"/></svg></button>
+    </div>
+    <div class="tools">
+      <button id="read" aria-label="Read to me"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M3 5c3-1 6-1 9 1 3-2 6-2 9-1v14c-3-1-6-1-9 1-3-2-6-2-9-1z"/><path d="M12 6v14"/></svg><span>Read to me</span></button>
+      <button id="magic" aria-pressed="true" aria-label="Pop-up magic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 2l1.6 4.4L17 8l-4.4 1.6L11 14l-1.6-4.4L5 8l4.4-1.6zM18 13l.9 2.1L21 16l-2.1.9L18 19l-.9-2.1L15 16l2.1-.9zM6 15l.7 1.6L8.3 17l-1.6.7L6 19.3l-.7-1.6L3.7 17l1.6-.4z"/></svg><span>Pop-ups</span></button>
+      <button id="look" aria-pressed="false" aria-label="Look closer at the page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.5 5.5"/></svg><span>Look closer</span></button>
+      <button id="map" aria-label="Garden map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></svg><span>Map</span></button>
+      <button id="games" aria-label="Games and links"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="2.5" y="7" width="19" height="11" rx="5.5"/><path d="M7 10.5v4M5 12.5h4" stroke-linecap="round"/><circle cx="15.5" cy="11.5" r="1.2" fill="currentColor"/><circle cx="18" cy="14" r="1.2" fill="currentColor"/></svg><span>Games &amp; links</span></button>
+      <button id="ar" class="xr" aria-label="Place the book in your room with AR"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>AR</span></button>
+      <button id="vr" class="xr" aria-label="Enter VR"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M3 8h18v9h-6l-1.5-2.5h-3L9 17H3z"/><circle cx="8" cy="12" r="1.5" fill="currentColor"/><circle cx="16" cy="12" r="1.5" fill="currentColor"/></svg><span>VR</span></button>
+      <button id="cam" class="xr" aria-label="Camera magic window"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M4 7h3l2-2.5h6L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Camera</span></button>
+      <button id="scanbtn" class="xr" aria-label="Scan my printed book"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M4 12h16"/></svg><span>Scan my book</span></button>
+    </div>
+  </div>
+</div>
+
+<div id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-h"><div><h2 id="sheet-h"></h2><p id="sheet-b"></p><div class="sheet-btns"><a id="sheet-a" class="go" target="_blank" rel="noopener" style="display:none"></a><button id="sheet-x">OK</button></div></div></div>
+
+<div id="loading">
+  <div class="card">
+    <img src="pages/p-01.jpg" alt="Cover of Nia and the Number Garden, Deluxe Edition">
+    <h1>Nia &amp; the Number Garden</h1>
+    <p id="loadmsg">Opening the garden gate…</p>
+    <button id="start" disabled>Loading…</button>
+  </div>
+</div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
