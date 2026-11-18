@@ -15,9 +15,9 @@ A living 3D, AR and VR edition of *Nia & the Number Garden — Deluxe Edition* b
 ## Modes
 | Button | Works on |
 |---|---|
-| AR (place the book on a table) | Chrome on Android (ARCore), Meta Quest |
+| AR (place the book on a table) | Chrome on Android (ARCore), Meta Quest. On iPad and iPhone it opens the camera AR view below |
 | VR (garden world) | Meta Quest browser and other WebXR headsets |
-| Camera (pop-ups over the live camera) | iPhone, Android, laptops |
+| Camera (pop-ups over the live camera; with motion allowed, the book stays put as you move the tablet; pinch to zoom, ◎ to re-center) | iPad, iPhone, Android, laptops |
 | Scan my book (point at the printed cover or chapter pictures) | iPhone, Android |
 
 Camera, AR and VR need HTTPS, which GitHub Pages provides.
@@ -28,4 +28,5 @@ Camera, AR and VR need HTTPS, which GitHub Pages provides.
 - `core.js`, `props.js`, `garden.js`: characters, props, garden
 - `pages/`: book pages · `music/`: songs · `videos/`: chapter clips · `models/`: character models (packed as JS)
 - `targets.js`: image-tracking data for the printed book (MindAR)
+- `compat.js`: small fixes for older iPads (iPadOS 15–16) and iPad detection
 - `nia-number-garden.zip`: the earlier interactive math activity (archived)

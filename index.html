@@ -70,6 +70,8 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
 #sheet-x{background:var(--gold);color:var(--deep);font-weight:700;border-radius:999px;padding:12px 22px;min-height:44px}
 #scan{position:fixed;inset:0;z-index:4;display:none;background:#000}
 #scan video{object-fit:cover}
+#recenter{position:fixed;z-index:6;top:calc(max(10px,env(safe-area-inset-top)) + 58px);right:12px;display:none;align-items:center;gap:6px;background:var(--gold);color:var(--deep);font-weight:700;border-radius:999px;padding:10px 16px;min-height:44px;box-shadow:0 3px 0 #c99a00}
+body.gyro #recenter{display:flex}
 #exitscan{position:fixed;z-index:30;top:max(12px,env(safe-area-inset-top));right:12px;display:none;background:var(--gold);color:var(--deep);font-weight:700;border-radius:999px;padding:12px 18px}
 body.scanning #exitscan{display:block}
 body.scanning .tools,body.scanning .pager,body.xr-vr #ui{display:none}
@@ -90,6 +92,8 @@ body.scanning .tools,body.scanning .pager,body.xr-vr #ui{display:none}
   #exptitle{font-size:13px;max-width:calc(100% - 24px);overflow:hidden;text-overflow:ellipsis}
 }
 </style>
+<!-- lets iPads older than iPadOS 16.4 load the book (they lack import maps); does nothing on newer browsers -->
+<script async src="https://cdn.jsdelivr.net/npm/es-module-shims@1.10.0/dist/es-module-shims.js"></script>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -102,6 +106,7 @@ body.scanning .tools,body.scanning .pager,body.xr-vr #ui{display:none}
 <canvas id="c" aria-label="3D pop-up book of Nia and the Number Garden"></canvas>
 <div id="scan"></div>
 <button id="exitscan">Back to the book</button>
+<button id="recenter" aria-label="Bring the book back in front of you">◎ Center the book</button>
 
 <div id="ui">
   <div class="top">

@@ -1,4 +1,5 @@
 // Nia & the Number Garden — Deluxe AR Book Experience
+import { IS_IOS } from './compat.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -26,7 +27,7 @@ const saveStars = () => { try { localStorage.setItem('nia-stars', JSON.stringify
 /* ---------- renderer / scene ---------- */
 const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, IS_IOS ? 1.5 : 2)); // iPad screens are huge; full 2x runs out of memory and stutters
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.xr.enabled = true;
 const scene = new THREE.Scene();
@@ -41,7 +42,7 @@ const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environment = envMap; scene.environmentIntensity = 0.55;
 scene.add(new THREE.HemisphereLight('#fff7e0', '#5c8a3a', 1.2));
 const sun = new THREE.DirectionalLight('#fff4d6', 2.2); sun.position.set(1.6, 3.2, 1.8); scene.add(sun);
-sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+sun.castShadow = true; sun.shadow.mapSize.set(IS_IOS ? 1024 : 2048, IS_IOS ? 1024 : 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
 Object.assign(sun.shadow.camera, { left: -1.6, right: 1.6, top: 1.6, bottom: -1.6, near: 0.5, far: 8 });
 const fill = new THREE.DirectionalLight('#c9e7ff', 0.6); fill.position.set(-2, 1.5, -1); scene.add(fill);
 
@@ -357,7 +358,8 @@ function addMediaBar(host, key, spread) {
   const playClip = (name) => {
     clearPanel(); video = document.createElement('video');
     Object.assign(video, { src: 'videos/' + name + '.mp4', loop: true, playsInline: true, crossOrigin: 'anonymous', muted: !sound.on });
-    video.setAttribute('playsinline', ''); video.play().catch(() => { video.muted = true; video.play().catch(() => { }); });
+    video.setAttribute('playsinline', ''); video.setAttribute('webkit-playsinline', '');
+    const v = video; v.play().catch(() => { v.muted = true; v.dataset.needsUnmute = sound.on ? '1' : ''; v.play().catch(() => { }); });
     const vt = new THREE.VideoTexture(video); vt.colorSpace = THREE.SRGBColorSpace;
     const scr = new THREE.Group(); scr.userData.billboard = true; scr.position.set(0, 0.55, 0.12);
     const frame = new THREE.Mesh(new THREE.PlaneGeometry(0.66, 0.66), new THREE.MeshBasicMaterial({ color: '#5a189a' })); scr.add(frame);
@@ -399,6 +401,15 @@ function labelSprite(text, bg = '#ffffff', fg = '#3c1361', size = 0.056) {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false })); const k = size / fs; s.scale.set(w * k, h * k, 1); s.renderOrder = 15; return s;
 }
 
+// iPad only lets a video play with sound from the end of a tap, so a clip started on touch-down
+// begins muted and gets its sound back as the finger lifts.
+function unmuteVideo() {
+  if (!video || video.dataset.needsUnmute !== '1' || !sound.on) return;
+  const v = video; v.dataset.needsUnmute = ''; v.muted = false;
+  v.play().catch(() => { v.muted = true; v.play().catch(() => { }); });
+}
+['pointerup', 'touchend', 'click'].forEach(ev => addEventListener(ev, unmuteVideo, true));
+
 /* ---------- input: taps, drags, XR controllers ---------- */
 const ray = new THREE.Raycaster();
 function findHandler(o, key) { while (o) { if (o.userData[key]) return o; o = o.parent; } return null; }
@@ -430,8 +441,8 @@ canvas.addEventListener('pointerdown', (e) => {
 }, { capture: true });
 canvas.addEventListener('pointermove', (e) => { if (dragTarget) handleMove(pointerRay(e, camera, canvas)); });
 canvas.addEventListener('pointerup', (e) => {
-  const wasDrag = !!dragTarget; handleUp(); controls.enabled = mode !== 'xr';
-  if (!wasDrag && downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < 8 && performance.now() - downAt.t < 350 && controls.enabled) pageTapFallback(pointerRay(e, camera, canvas));
+  const wasDrag = !!dragTarget; handleUp(); controls.enabled = mode !== 'xr' && !gyroLive();
+  if (!wasDrag && downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < 8 && performance.now() - downAt.t < 350 && (controls.enabled || gyroLive())) pageTapFallback(pointerRay(e, camera, canvas));
   downAt = null;
 });
 
@@ -466,6 +477,7 @@ let xrKind = null;
 $('ui').addEventListener('beforexrselect', (e) => { if (e.target.closest('button')) e.preventDefault(); });
 async function startXR(kind) {
   if (!navigator.xr) return notSupported(kind);
+  if (mode === 'camera') stopCamera();
   try {
     const opts = kind === 'ar'
       ? { requiredFeatures: ['hit-test'], optionalFeatures: ['dom-overlay', 'local-floor'], domOverlay: { root: $('ui') } }
@@ -496,25 +508,80 @@ function notSupported(kind, e) {
   const framed = window.top !== window.self;
   showSheet(kind === 'ar' ? 'AR needs a phone or headset' : 'VR needs a headset',
     (framed ? 'This preview runs inside a protected frame that blocks the camera and WebXR. Open the published book on your own site (niasnumbergarden.shop) to use it.<br><br>' : '') +
-    (kind === 'ar' ? 'Room-scale AR works in Chrome on Android and on Meta Quest. On iPhone, use <b>Camera</b> or <b>Scan my book</b> instead.' : 'VR works in the Meta Quest browser and other WebXR headsets.'));
+    (kind === 'ar' ? 'Room-scale AR works in Chrome on Android and on Meta Quest. On iPad and iPhone, tap <b>AR</b> or <b>Camera</b> and allow the camera and motion, or use <b>Scan my book</b> with your printed copy.' : 'VR works in the Meta Quest browser and other WebXR headsets.'));
 }
 
-// Camera "magic window": the garden floats over the live camera (iPhone friendly)
-let camStream = null;
-async function startCamera() {
-  try {
-    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-    const v = $('camvid'); v.srcObject = camStream; await v.play();
-    mode = 'camera'; world.visible = false; document.body.classList.add('camera');
-    toast('Drag to look around the pop-up. Tap the magic to play!');
-  } catch (e) { notSupported('camera'); showSheet('Camera not available', (window.top !== window.self ? 'This preview blocks the camera. ' : '') + 'Open the book on niasnumbergarden.shop and allow camera access to see the garden pop up in your room.'); }
+// Camera "magic window": the garden floats over the live camera (iPad and iPhone friendly).
+// Where the device has a gyroscope, the book stays put in the room as you move the tablet around it.
+let camStream = null, gyro = null;
+const camSaved = { pos: new THREE.Vector3(), q: new THREE.Quaternion() };
+const gq = { e: new THREE.Euler(), dev: new THREE.Quaternion(), yaw: new THREE.Quaternion(), scr: new THREE.Quaternion(),
+  fix: new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)), z: new THREE.Vector3(0, 0, 1), y: new THREE.Vector3(0, 1, 0), dir: new THREE.Vector3(0, 0.62, 1).normalize() };
+function gyroLive() { return mode === 'camera' && !!(gyro && gyro.data); }
+async function askMotion() { // iPad and iPhone ask for permission; it must be the first thing a tap does
+  const D = window.DeviceOrientationEvent; if (!D) return false;
+  if (typeof D.requestPermission === 'function') { try { return (await D.requestPermission()) === 'granted'; } catch (e) { return false; } }
+  return true;
 }
-function stopCamera() { if (camStream) camStream.getTracks().forEach(t => t.stop()); camStream = null; mode = 'book'; world.visible = true; document.body.classList.remove('camera'); }
+function screenAngle() { return typeof window.orientation === 'number' ? window.orientation : (screen.orientation && screen.orientation.angle) || 0; }
+function onOrient(e) {
+  if (!gyro || e.alpha == null || e.beta == null) return;
+  if (!gyro.data) { controls.enabled = false; document.body.classList.add('gyro'); toast('Move around: the book stays on your table. Pinch to zoom.'); }
+  gyro.data = { a: e.alpha, b: e.beta, g: e.gamma || 0 };
+}
+function applyGyro() {
+  const d = gyro.data, R = THREE.MathUtils.degToRad;
+  gq.e.set(R(d.b), R(d.a), -R(d.g), 'YXZ'); gq.dev.setFromEuler(gq.e).multiply(gq.fix).multiply(gq.scr.setFromAxisAngle(gq.z, -R(screenAngle())));
+  if (gyro.heading == null) { // put the book straight ahead of wherever the tablet points first
+    let f = new THREE.Vector3(0, 0, -1).applyQuaternion(gq.dev);
+    if (Math.hypot(f.x, f.z) < 0.35) f = new THREE.Vector3(0, 1, 0).applyQuaternion(gq.dev); // held flat over the table: the top edge points ahead
+    gyro.heading = Math.atan2(-f.x, -f.z);
+  }
+  camera.quaternion.copy(gq.yaw.setFromAxisAngle(gq.y, -gyro.heading)).multiply(gq.dev);
+  camera.position.copy(controls.target).addScaledVector(gq.dir, gyro.dist);
+}
+const touchGap = (e) => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+let pinch = null;
+canvas.addEventListener('touchstart', (e) => { if (gyroLive() && e.touches.length === 2) pinch = { d: touchGap(e), k: gyro.dist }; }, { passive: true });
+canvas.addEventListener('touchmove', (e) => { if (pinch && gyroLive() && e.touches.length === 2) gyro.dist = THREE.MathUtils.clamp(pinch.k * pinch.d / touchGap(e), 1.1, 4.5); }, { passive: true });
+canvas.addEventListener('touchend', (e) => { if (e.touches.length < 2) pinch = null; });
+function setCamButtons(on) { $('cam').setAttribute('aria-pressed', on); if ($('ar').dataset.ok !== 'true') $('ar').setAttribute('aria-pressed', on); }
+let camBusy = false;
+async function startCamera() {
+  if (camBusy || mode === 'camera') return; camBusy = true;
+  const motionOk = await askMotion(); // ask before the camera so the iPad still counts it as part of the tap
+  try {
+    if (mode === 'scan') stopScan();
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    const v = $('camvid'); v.muted = true; v.setAttribute('playsinline', ''); v.srcObject = camStream; await v.play();
+    camSaved.pos.copy(camera.position); camSaved.q.copy(camera.quaternion);
+    mode = 'camera'; world.visible = false; scene.fog = null; document.body.classList.add('camera'); setCamButtons(true);
+    gyro = { data: null, heading: null, dist: 2.3 };
+    if (motionOk) addEventListener('deviceorientation', onOrient);
+    toast(motionOk ? 'Point your camera at a table. Tap the magic to play!' : 'Drag to look around the pop-up. Tap the magic to play!');
+    if (!motionOk && IS_IOS) setTimeout(() => toast('Tip: allow Motion & Orientation so the book stays in your room.'), 3400);
+  } catch (e) {
+    console.warn(e); if (camStream) camStream.getTracks().forEach(t => t.stop()); camStream = null;
+    showSheet('Camera not available', (window.top !== window.self ? 'This preview blocks the camera. ' : '') + 'Open the book in Safari or Chrome and allow camera access to see the garden pop up in your room. On iPad: Settings › Safari › Camera › Allow.');
+  } finally { camBusy = false; }
+}
+function stopCamera() {
+  removeEventListener('deviceorientation', onOrient);
+  if (camStream) camStream.getTracks().forEach(t => t.stop()); camStream = null; $('camvid').srcObject = null;
+  const was = mode === 'camera'; gyro = null; pinch = null; document.body.classList.remove('camera', 'gyro'); setCamButtons(false);
+  if (was) { mode = 'book'; world.visible = true; scene.fog = worldFog; camera.position.copy(camSaved.pos); camera.quaternion.copy(camSaved.q); controls.enabled = true; controls.update(); }
+}
+$('recenter').onclick = () => { if (gyro) { gyro.heading = null; gyro.dist = 2.3; } };
 
 // Scan the printed book: image tracking on the cover and 20 illustrated pages
 const TARGET_SPREAD = [0, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 31];
 let mind = null;
+let scanCam = null;
+$('scan').addEventListener('pointerdown', (e) => { if (!active || !scanCam) return; const rc = pointerRay(e, scanCam, $('scan')); handleDown(rc, [active.host]); });
+$('scan').addEventListener('pointermove', (e) => { if (dragTarget && scanCam) handleMove(pointerRay(e, scanCam, $('scan'))); });
+$('scan').addEventListener('pointerup', handleUp);
 async function startScan() {
+  if (mode === 'camera') stopCamera(); // an iPad can only feed one camera view at a time
   showSheet('Getting the magic ready…', 'Loading the page tracker. Point your camera at the cover or any story picture in your printed book.');
   try {
     const { MindARThree } = await import('https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js');
@@ -522,7 +589,8 @@ async function startScan() {
     $('scan').style.display = 'block'; document.body.classList.add('scanning'); mode = 'scan';
     const tsrc = URL.createObjectURL(new Blob([b64ToBuf((await import('./targets.js')).default)]));
     mind = new MindARThree({ container: $('scan'), imageTargetSrc: tsrc, maxTrack: 1, uiLoading: 'yes', uiScanning: 'yes', filterMinCF: 0.0001, filterBeta: 0.001 });
-    const { renderer: mr, scene: ms, camera: mc } = mind;
+    const { renderer: mr, scene: ms, camera: mc } = mind; scanCam = mc;
+    mr.setPixelRatio(Math.min(devicePixelRatio, IS_IOS ? 1.5 : 2));
     mr.outputColorSpace = THREE.SRGBColorSpace;
     ms.environment = new THREE.PMREMGenerator(mr).fromScene(new RoomEnvironment(), 0.04).texture; ms.environmentIntensity = 0.6;
     ms.add(new THREE.HemisphereLight('#fff7e0', '#5c8a3a', 1.4)); const dl = new THREE.DirectionalLight('#fff', 1.4); dl.position.set(0, 1, 2); ms.add(dl);
@@ -532,17 +600,15 @@ async function startScan() {
       anchor.onTargetFound = () => { sfx.good(); cur = spread; updateUI(); startExperience(holder, spread); };
       anchor.onTargetLost = () => { };
     });
-    $('scan').addEventListener('pointerdown', (e) => { if (!active) return; const rc = pointerRay(e, mc, $('scan')); handleDown(rc, [active.host]); });
-    $('scan').addEventListener('pointermove', (e) => { if (dragTarget) handleMove(pointerRay(e, mc, $('scan'))); });
-    $('scan').addEventListener('pointerup', handleUp);
     await mind.start();
     const clock2 = new THREE.Clock();
     mr.setAnimationLoop(() => { const dt = Math.min(0.05, clock2.getDelta()); updateTweens(dt); updateExperience(clock2.elapsedTime, dt, mc); mr.render(ms, mc); });
   } catch (e) { console.warn(e); stopScan(); showSheet('Camera not available', (window.top !== window.self ? 'This preview blocks the camera. ' : '') + 'Open the book on niasnumbergarden.shop, allow the camera, and point it at your printed book.'); }
 }
 function stopScan() {
-  try { if (mind) { mind.renderer.setAnimationLoop(null); mind.stop(); mind.renderer.domElement.remove(); } } catch (e) { }
-  mind = null; $('scan').innerHTML = ''; $('scan').style.display = 'none'; document.body.classList.remove('scanning'); mode = 'book'; startExperience();
+  try { if (mind) { mind.renderer.setAnimationLoop(null); mind.stop(); } } catch (e) { }
+  try { if (mind) { mind.renderer.dispose(); mind.renderer.forceContextLoss(); mind.renderer.domElement.remove(); } } catch (e) { } // free the GPU so a second scan still works on iPad
+  mind = null; scanCam = null; $('scan').innerHTML = ''; $('scan').style.display = 'none'; document.body.classList.remove('scanning'); mode = 'book'; startExperience();
 }
 
 /* ---------- UI ---------- */
@@ -569,7 +635,7 @@ $('look').onclick = () => { // swing the camera overhead to read the printed pag
   const p = top ? new THREE.Vector3(0, 2.35, 0.25) : new THREE.Vector3(0, 1.75, 2.35);
   tween(camera.position, { x: p.x, y: p.y, z: p.z }, 0.9, 'inOut'); if (top && active) active.host.visible = false; if (!top && active) active.host.visible = true;
 };
-$('snd').onclick = () => { sound.on = !sound.on; $('snd').setAttribute('aria-pressed', sound.on); if (!sound.on) stopSpeech(); };
+$('snd').onclick = () => { sound.on = !sound.on; $('snd').setAttribute('aria-pressed', sound.on); if (!sound.on) stopSpeech(); if (video) { video.muted = !sound.on; if (sound.on) video.dataset.needsUnmute = ''; } };
 $('map').onclick = () => setCur(3);
 $('musicbtn').onclick = () => setMusic(!musicOn);
 $('songname').onclick = () => nextSong();
@@ -578,18 +644,28 @@ $('games').onclick = () => { const all = [...GAMES, ...LINKS.filter(l => l.title
   $('sheet-a').style.display = 'none';
   showSheet('Games & links', all.map(g => `<a class="go" style="margin:0 6px 8px 0" href="${g.url}" target="_blank" rel="noopener">${g.title}</a>`).join('') + '<br><small>Inside the book, tap Games or Links under any pop-up.</small>'); };
 $('bubble-x').onclick = () => { $('bubble').classList.remove('show'); stopSpeech(); };
-$('ar').onclick = () => { if (mode === 'xr') return xrSession.end(); startXR('ar'); };
+$('ar').onclick = async () => {
+  if (mode === 'xr') return xrSession.end();
+  if (mode === 'camera') return stopCamera();
+  // No room-scale WebXR (iPad, iPhone, laptops): use the camera AR window instead of an error
+  if (!navigator.xr || $('ar').dataset.ok === 'false') return startCamera();
+  if ($('ar').dataset.ok !== 'true' && !(await xrSupport).ar) return startCamera();
+  startXR('ar');
+};
 $('vr').onclick = () => { if (mode === 'xr') return xrSession.end(); startXR('vr'); };
 $('cam').onclick = () => mode === 'camera' ? stopCamera() : startCamera();
 $('scanbtn').onclick = () => mode === 'scan' ? stopScan() : startScan();
 $('exitscan').onclick = stopScan;
 addEventListener('keydown', (e) => { if (e.key === 'ArrowRight') next(); if (e.key === 'ArrowLeft') prev(); });
 // detect XR support to label buttons honestly
-(async () => {
+const xrSupport = (async () => {
   let ar = false, vr = false;
   try { if (navigator.xr) { ar = await navigator.xr.isSessionSupported('immersive-ar'); vr = await navigator.xr.isSessionSupported('immersive-vr'); } } catch (e) { }
   $('ar').dataset.ok = ar; $('vr').dataset.ok = vr;
-  if (!vr) $('vr').classList.add('dim'); if (!ar) $('ar').classList.add('dim');
+  const camOk = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  if (!vr) $('vr').classList.add('dim'); if (!ar && !camOk) $('ar').classList.add('dim');
+  if (!ar && camOk) $('ar').setAttribute('aria-label', 'See the book in your room through the camera');
+  return { ar, vr };
 })();
 
 window.__nia = { get active() { return active; }, setCur, camera, controls, renderer, scene };
@@ -599,7 +675,7 @@ function resize() {
   renderer.setSize(w, h, false); camera.aspect = w / h;
   const portrait = h > w; camera.fov = portrait ? 62 : 42; camera.updateProjectionMatrix();
   controls.minDistance = portrait ? 1.6 : 1;
-  if (!resize.done || resize.portrait !== portrait) { // frame the open spread for this screen shape
+  if (!gyroLive() && (!resize.done || resize.portrait !== portrait)) { // frame the open spread for this screen shape
     const d = camera.position.clone().sub(controls.target); d.setLength(portrait ? 3.4 : 2.95); camera.position.copy(controls.target).add(d);
     resize.done = true; resize.portrait = portrait;
   }
@@ -624,7 +700,7 @@ renderer.setAnimationLoop((time, frame) => {
   if (mode === 'xr') controllers.forEach(c => { if (c.userData.selecting && dragTarget) handleMove(c.userData.ray()); });
   const cam = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera;
   updateExperience(t, dt, cam);
-  if (!renderer.xr.isPresenting) controls.update();
+  if (gyroLive()) applyGyro(); else if (!renderer.xr.isPresenting) controls.update();
   renderer.render(scene, camera);
 });
 
