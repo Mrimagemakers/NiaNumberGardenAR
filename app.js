@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { b64ToBuf, FX, sfx, speak, stopSpeech, sound, updateTweens, tween, canvasTex, glowTexture, loadModels, NUM_COLORS, FONT } from './core.js';
+import { saveSound, b64ToBuf, FX, sfx, speak, stopSpeech, sound, updateTweens, tween, canvasTex, glowTexture, loadModels, NUM_COLORS, FONT } from './core.js';
 import { EXPERIENCES, SPREAD_EXP, CHAPTERS } from './exps.js';
 import { makeStoryTree, makeBush, makeMushroom, makeRock, makeSunflower, makePetalFlower, grassField, bakeStatic } from './garden.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -298,7 +298,7 @@ bgm.addEventListener('ended', () => { loadSong(song + 1); if (musicOn) bgm.play(
 function setMusic(on) { musicOn = on; $('musicbtn').setAttribute('aria-pressed', on); try { localStorage.setItem('nia-music', on ? 'on' : 'off'); } catch (e) { }
   if (on) { if (!bgm.src) loadSong(0); bgm.play().catch(() => { }); toast('♪ Now playing: ' + SONGS[song].title); } else bgm.pause(); }
 function nextSong() { loadSong(song + 1); if (musicOn) bgm.play().catch(() => { }); toast('♪ Now playing: ' + SONGS[song].title); }
-function duckMusic(dt) { const talking = (window.speechSynthesis && speechSynthesis.speaking) || (video && !video.paused); const target = !sound.on ? 0 : talking ? musicVol * 0.25 : musicVol; bgm.volume += (target - bgm.volume) * Math.min(1, dt * 4); }
+function duckMusic(dt) { const talking = (window.speechSynthesis && speechSynthesis.speaking) || (video && !video.paused); const mv = sound.master * sound.music; const target = !sound.on ? 0 : talking ? mv * 0.25 : mv; bgm.volume += (target - bgm.volume) * Math.min(1, dt * 4); }
 
 /* ---------- social and share ---------- */
 // Add each channel's link here; channels with an empty url are hidden.
@@ -313,11 +313,75 @@ async function shareBook() {
   try { if (navigator.share) { await navigator.share(data); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
   try { await navigator.clipboard.writeText(SITE_URL); toast('Link copied! Paste it anywhere to share.'); } catch (e) { showSheet('Share the book', 'Copy this link: <b>' + SITE_URL + '</b>'); }
 }
-function socialSheet() {
+async function socialSheet() {
+  if (xrSession) { xrSession.end(); await new Promise(r => setTimeout(r, 400)); }
+  if (!(await grownUpGate())) return;
   const live = SOCIAL.filter(s => s.url);
   showSheet('Follow & share', live.map(s => `<a class="go" style="margin:0 6px 8px 0" href="${s.url}" target="_blank" rel="noopener">${s.name}</a>`).join('') +
     `<br><button class="go" id="sharebtn2" style="border:0;margin-top:4px">Share this book</button>`);
   const b = document.getElementById('sharebtn2'); if (b) b.onclick = shareBook;
+}
+
+
+/* ---------- settings, safety, privacy, grown-up check ---------- */
+const seen = (k) => { try { return localStorage.getItem('nia-seen-' + k) === '1'; } catch (e) { return false; } };
+const markSeen = (k) => { try { localStorage.setItem('nia-seen-' + k, '1'); } catch (e) { } };
+// shows a notice once per device; resolves true when the reader continues
+function notice(key, title, html, okText = 'I understand') {
+  return new Promise((res) => {
+    if (seen(key)) return res(true);
+    $('sheet-h').textContent = title; $('sheet-b').innerHTML = html; $('sheet-a').style.display = 'none';
+    const ok = $('sheet-x'), cancel = $('sheet-cancel');
+    ok.textContent = okText; cancel.style.display = 'inline-flex'; $('sheet').classList.add('show');
+    const done = (v) => { ok.onclick = hideSheet; cancel.onclick = null; cancel.style.display = 'none'; ok.textContent = 'OK'; $('sheet').classList.remove('show'); if (v) markSeen(key); res(v); };
+    ok.onclick = () => done(true); cancel.onclick = () => done(false);
+  });
+}
+const SAFETY = {
+  ar: ['Before you use AR', `<b>Grown-ups: please stay with young children.</b><br>• Look around first and clear the space: no stairs, furniture edges, pets or roads nearby.<br>• Stay in one spot. Don't walk while looking at the screen.<br>• Take a break every 15 minutes, or sooner if eyes feel tired.<br>• The book has sparkles and flashing effects. If anyone has a history of seizures, check with a doctor first.<br>• The camera picture stays on this device. Nothing is recorded or uploaded.`],
+  vr: ['Before you use VR', `<b>Grown-ups: please supervise.</b><br>• Follow your headset maker's age rating and safety guide.<br>• Set up your play boundary and clear the area.<br>• Sit down if you feel dizzy, and stop if you feel sick, have eye strain or a headache.<br>• Take a break every 15 minutes.<br>• The book has sparkles and flashing effects. If anyone has a history of seizures, check with a doctor first.`],
+  camera: ['Using the camera', `This mode shows your camera picture behind the 3D garden.<br>• The camera picture stays on this device. Nothing is recorded, saved or uploaded.<br>• Your browser will ask for camera permission. You can say no and still read the book.<br>• Stay aware of your surroundings while holding your phone up.<br>• Grown-ups: please stay with young children.`],
+};
+async function safetyGate(kind) { const [t, h] = SAFETY[kind]; return notice('safety-' + kind, t, h, "We're ready"); }
+// simple grown-up check before leaving the book
+let gateOK = false;
+function grownUpGate() {
+  return new Promise((res) => {
+    if (gateOK) return res(true);
+    const a = 6 + Math.floor(Math.random() * 7), b = 5 + Math.floor(Math.random() * 7);
+    $('sheet-h').textContent = 'Ask a grown-up'; $('sheet-a').style.display = 'none';
+    $('sheet-b').innerHTML = `This button opens another website.<br><b>Grown-ups:</b> what is ${a} × ${b}?<br><input id="gate-in" inputmode="numeric" autocomplete="off" aria-label="Answer" style="font:inherit;font-size:20px;width:120px;margin-top:10px;padding:8px 12px;border-radius:12px;border:3px solid #7b2cbf">`;
+    const ok = $('sheet-x'), cancel = $('sheet-cancel'); ok.textContent = 'Continue'; cancel.style.display = 'inline-flex'; $('sheet').classList.add('show');
+    setTimeout(() => { const i = $('gate-in'); i && i.focus(); }, 50);
+    const done = (v) => { ok.onclick = hideSheet; cancel.style.display = 'none'; ok.textContent = 'OK'; if (!v) hideSheet(); res(v); };
+    ok.onclick = () => { if (+($('gate-in').value || '').trim() === a * b) { gateOK = true; done(true); } else { $('gate-in').value = ''; $('gate-in').placeholder = 'Try again'; } };
+    cancel.onclick = () => done(false);
+  });
+}
+function privacyHTML() {
+  return `<b>Made for children, with grown-ups in mind.</b><br><br>
+<b>What we save:</b> chapter stars, sound settings and which notices you've seen. They are saved only in this browser (local storage) so the book remembers you. Nothing is sent to us. There are <b>no ads, no accounts, no tracking or advertising cookies, and no analytics</b>.<br><br>
+<b>Camera:</b> used only when you choose Camera, AR or Scan my book. The picture is processed on this device and is never recorded or uploaded.<br><br>
+<b>Voice:</b> read-aloud uses your device's built-in voice. Nothing you say is heard; the book never uses the microphone.<br><br>
+<b>Other services:</b> the 3D engine and fonts load from jsDelivr and Google Fonts, and the site is hosted on GitHub Pages. Like any website, these services may receive your IP address when files load.<br><br>
+<b>Outside links:</b> buttons to other websites and stores ask a grown-up question first.<br><br>
+<b>Safety:</b> grown-ups, please supervise AR and VR, clear the play space, and take breaks every 15 minutes. The book has sparkles and flashing effects; if anyone has a history of seizures, check with a doctor first.<br><br>
+<button class="go" id="cleardata" style="border:0">Erase saved stars and settings</button><br><br>
+<small>© 2026 PenGame Publishing, LLC · Bright Minds Explorers. Nia & the Number Garden, its story, art and characters © Darnell Clark. All rights reserved.<br>PenGame Publishing, LLC · 260 Peachtree Street, Suite 2229, Atlanta, GA 30303 · pengamepublishing.com</small>`;
+}
+function showPrivacy() {
+  showSheet('Privacy & safety', privacyHTML());
+  const b = document.getElementById('cleardata');
+  if (b) b.onclick = () => { try { Object.keys(localStorage).filter(k => k.startsWith('nia-')).forEach(k => localStorage.removeItem(k)); } catch (e) { } stars.clear(); drawPassport(); updateUI(); b.textContent = 'Erased'; b.disabled = true; };
+}
+function openSettings() {
+  const row = (id, label, val) => `<label style="display:grid;grid-template-columns:110px 1fr 46px;align-items:center;gap:10px;margin:8px 0"><span>${label}</span><input type="range" id="${id}" min="0" max="100" value="${Math.round(val * 100)}" style="width:100%;accent-color:#7b2cbf;height:28px"><b id="${id}-v">${Math.round(val * 100)}</b></label>`;
+  showSheet('Sound & settings', row('v-master', 'All sound', sound.master) + row('v-music', 'Music', sound.music) + row('v-voice', 'Voice', sound.voice) + row('v-sfx', 'Effects', sound.sfx) +
+    `<label style="display:grid;grid-template-columns:110px 1fr 46px;align-items:center;gap:10px;margin:8px 0"><span>Reading speed</span><input type="range" id="v-rate" min="60" max="120" value="${Math.round(sound.rate * 100)}" style="width:100%;accent-color:#1f9d55;height:28px"><b id="v-rate-v">${Math.round(sound.rate * 100)}</b></label>` +
+    `<button class="go" id="v-test" style="border:0;margin-top:6px">Test sound</button> <button class="go" id="v-privacy" style="border:0;margin-top:6px;background:#7b2cbf">Privacy & safety</button>`);
+  for (const k of ['master', 'music', 'voice', 'sfx', 'rate']) { const el = $('v-' + k); el.oninput = () => { sound[k] = el.value / 100; $('v-' + k + '-v').textContent = el.value; if (video) video.volume = Math.min(1, sound.master); saveSound(); }; }
+  $('v-test').onclick = () => { sfx.good(); speak('One, two, three. The Number Garden sounds great!'); };
+  $('v-privacy').onclick = showPrivacy;
 }
 
 /* ---------- in-AR media bar: videos, games, links, replay ---------- */
@@ -340,7 +404,9 @@ const LINKS = [
   { page: 61, title: 'Get the Book', sub: 'Find Nia & the Number Garden on Amazon', url: 'https://www.amazon.com/Number-Garden-Bright-Minds-Explorers/dp/B0GDCNBFYL/' },
   { page: 4, title: 'PenGame Publishing', sub: 'More books from Bright Minds Explorers', url: 'https://www.pengamepublishing.com' },
 ];
-function openLink(item) {
+async function openLink(item) {
+  if (xrSession) { xrSession.end(); await new Promise(r => setTimeout(r, 400)); } else if (mode === 'scan') stopScan();
+  if (!(await grownUpGate())) return;
   const go = () => { $('sheet-a').href = item.url; $('sheet-a').textContent = 'Open ' + item.title; $('sheet-a').style.display = 'inline-flex';
     showSheet(item.title, item.sub + '.<br><small>' + item.url.replace(/^https?:\/\//, '') + '</small>'); };
   if (xrSession) { xrSession.end(); setTimeout(go, 400); } else if (mode === 'scan') { stopScan(); go(); } else go();
@@ -356,7 +422,7 @@ function addMediaBar(host, key, spread) {
   const items = [];
   const playClip = (name) => {
     clearPanel(); video = document.createElement('video');
-    Object.assign(video, { src: 'videos/' + name + '.mp4', loop: true, playsInline: true, crossOrigin: 'anonymous', muted: !sound.on });
+    Object.assign(video, { src: 'videos/' + name + '.mp4', loop: true, playsInline: true, crossOrigin: 'anonymous', muted: !sound.on }); video.volume = Math.min(1, sound.master);
     video.setAttribute('playsinline', ''); video.play().catch(() => { video.muted = true; video.play().catch(() => { }); });
     const vt = new THREE.VideoTexture(video); vt.colorSpace = THREE.SRGBColorSpace;
     const scr = new THREE.Group(); scr.userData.billboard = true; scr.position.set(0, 0.55, 0.12);
@@ -465,6 +531,7 @@ const controllers = [0, 1].map(i => {
 let xrKind = null;
 $('ui').addEventListener('beforexrselect', (e) => { if (e.target.closest('button')) e.preventDefault(); });
 async function startXR(kind) {
+  if (navigator.xr && !(await safetyGate(kind))) return;
   if (!navigator.xr) return notSupported(kind);
   try {
     const opts = kind === 'ar'
@@ -502,6 +569,7 @@ function notSupported(kind, e) {
 // Camera "magic window": the garden floats over the live camera (iPhone friendly)
 let camStream = null;
 async function startCamera() {
+  if (!(await safetyGate('camera'))) return;
   try {
     camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
     const v = $('camvid'); v.srcObject = camStream; await v.play();
@@ -515,6 +583,7 @@ function stopCamera() { if (camStream) camStream.getTracks().forEach(t => t.stop
 const TARGET_SPREAD = [0, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 31];
 let mind = null;
 async function startScan() {
+  if (!(await safetyGate('camera'))) return;
   showSheet('Getting the magic ready…', 'Loading the page tracker. Point your camera at the cover or any story picture in your printed book.');
   try {
     const { MindARThree } = await import('https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js');
@@ -569,12 +638,16 @@ $('look').onclick = () => { // swing the camera overhead to read the printed pag
   const p = top ? new THREE.Vector3(0, 2.35, 0.25) : new THREE.Vector3(0, 1.75, 2.35);
   tween(camera.position, { x: p.x, y: p.y, z: p.z }, 0.9, 'inOut'); if (top && active) active.host.visible = false; if (!top && active) active.host.visible = true;
 };
-$('snd').onclick = () => { sound.on = !sound.on; $('snd').setAttribute('aria-pressed', sound.on); if (!sound.on) stopSpeech(); };
+$('snd').onclick = () => { sound.on = !sound.on; saveSound(); $('snd').setAttribute('aria-pressed', sound.on); if (!sound.on) stopSpeech(); };
+$('snd').setAttribute('aria-pressed', sound.on);
 $('map').onclick = () => setCur(3);
 $('musicbtn').onclick = () => setMusic(!musicOn);
 $('songname').onclick = () => nextSong();
 $('follow').onclick = socialSheet;
-$('games').onclick = () => { const all = [...GAMES, ...LINKS.filter(l => l.title !== "Activity Hub")];
+$('settings').onclick = openSettings;
+$('privacylink').onclick = (e) => { e.preventDefault(); showPrivacy(); };
+$('sheet-cancel').onclick = hideSheet;
+$('games').onclick = async () => { if (!(await grownUpGate())) return; const all = [...GAMES, ...LINKS.filter(l => l.title !== "Activity Hub")];
   $('sheet-a').style.display = 'none';
   showSheet('Games & links', all.map(g => `<a class="go" style="margin:0 6px 8px 0" href="${g.url}" target="_blank" rel="noopener">${g.title}</a>`).join('') + '<br><small>Inside the book, tap Games or Links under any pop-up.</small>'); };
 $('bubble-x').onclick = () => { $('bubble').classList.remove('show'); stopSpeech(); };

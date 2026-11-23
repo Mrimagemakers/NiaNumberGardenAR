@@ -60,13 +60,15 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
 #bubble-x{position:absolute;top:6px;right:6px;width:36px;height:36px;border-radius:50%;background:#f3e8ff;color:var(--purple);font-size:20px}
 #toast{position:absolute;top:calc(max(10px,env(safe-area-inset-top)) + 100px);left:50%;transform:translate(-50%,-10px);opacity:0;transition:.3s;background:var(--green);color:#fff;font-weight:700;padding:10px 18px;border-radius:999px;pointer-events:none;white-space:nowrap}
 #toast.show{opacity:1;transform:translate(-50%,0)}
-#sheet{position:fixed;inset:0;z-index:20;display:none;place-items:center;background:rgba(43,16,72,.45);padding:20px}
+#sheet{position:fixed;inset:0;z-index:60;display:none;place-items:center;background:rgba(43,16,72,.45);padding:20px}
 #sheet.show{display:grid}
 #sheet>div{background:var(--paper);border-radius:28px;padding:24px 24px 20px;max-width:440px;border:4px solid var(--purple);box-shadow:0 8px 0 var(--deep)}
 #sheet h2{margin:0 0 8px;color:var(--purple);font-size:26px;line-height:1.1}
 #sheet p{margin:0 0 16px;font-size:17px}
 #sheet .sheet-btns{display:flex;gap:10px;flex-wrap:wrap}#sheet small{opacity:.7}
 .go{display:inline-flex;align-items:center;background:var(--green);color:#fff;font-weight:700;border-radius:999px;padding:12px 22px;min-height:44px;text-decoration:none}
+#sheet-cancel{background:#f3e8ff;color:var(--purple);font-weight:700;border-radius:999px;padding:12px 22px;min-height:44px;align-items:center}
+#sheet>div{max-height:88vh;overflow:auto}
 #sheet-x{background:var(--gold);color:var(--deep);font-weight:700;border-radius:999px;padding:12px 22px;min-height:44px}
 #scan{position:fixed;inset:0;z-index:4;display:none;background:#000}
 #scan video{object-fit:cover}
@@ -80,6 +82,7 @@ body.scanning .tools,body.scanning .pager,body.xr-vr #ui{display:none}
 #loading p{margin:0;opacity:.9;font-size:17px}
 #start{background:var(--gold);color:var(--deep);font-weight:700;font-size:20px;border-radius:999px;padding:16px 30px;min-height:56px;box-shadow:0 5px 0 #c99a00}
 #start:disabled{opacity:.7}
+#loading .fine{font-size:13px;opacity:.85;max-width:360px;line-height:1.4}#loading .fine a{color:var(--gold);font-weight:700}
 @keyframes bob{50%{transform:translateY(-8px) rotate(-1.5deg)}}
 @media (prefers-reduced-motion:reduce){#loading img{animation:none}}
 @media (max-width:1100px){.tools button.xr span{display:none}}
@@ -110,6 +113,7 @@ body.scanning .tools,body.scanning .pager,body.xr-vr #ui{display:none}
     <div class="pill" title="Chapter stars collected"><svg viewBox="0 0 24 24" fill="#ffb703"><path d="M12 2l3 6.6 7.2.8-5.4 4.9 1.5 7.1L12 17.8 5.7 21.4l1.5-7.1L1.8 9.4 9 8.6z"/></svg><span id="starcount">0</span>/18</div>
     <button class="musicpill" id="musicbtn" aria-pressed="true" aria-label="Music on or off"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 17.5a3 3 0 1 1-2-2.83V5l11-2v11.5a3 3 0 1 1-2-2.83V7.2L9 8.6z"/></svg></button><button class="songname" id="songname" title="Next song">Number Garden</button>
     <button class="ib" id="follow" aria-label="Follow and share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.8l7.4-4.4M8.3 13.2l7.4 4.4"/></svg></button>
+    <button class="ib" id="settings" aria-label="Sound and settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
     <button class="ib" id="snd" aria-pressed="true" aria-label="Sound and voice on or off"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg></button>
   </div>
   <div id="exptitle"></div>
@@ -135,7 +139,7 @@ body.scanning .tools,body.scanning .pager,body.xr-vr #ui{display:none}
   </div>
 </div>
 
-<div id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-h"><div><h2 id="sheet-h"></h2><p id="sheet-b"></p><div class="sheet-btns"><a id="sheet-a" class="go" target="_blank" rel="noopener" style="display:none"></a><button id="sheet-x">OK</button></div></div></div>
+<div id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-h"><div><h2 id="sheet-h"></h2><p id="sheet-b"></p><div class="sheet-btns"><a id="sheet-a" class="go" target="_blank" rel="noopener" style="display:none"></a><button id="sheet-x">OK</button><button id="sheet-cancel" style="display:none">Not now</button></div></div></div>
 
 <div id="loading">
   <div class="card">
@@ -143,6 +147,7 @@ body.scanning .tools,body.scanning .pager,body.xr-vr #ui{display:none}
     <h1>Nia &amp; the Number Garden</h1>
     <p id="loadmsg">Opening the garden gate…</p>
     <button id="start" disabled>Loading…</button>
+    <p class="fine">Best with a grown-up nearby. This book saves stars and settings on this device only: no ads, no tracking cookies, no accounts. <a href="#" id="privacylink">Privacy &amp; safety</a></p>
   </div>
 </div>
 <script type="module" src="./app.js"></script>
