@@ -384,6 +384,82 @@ function openSettings() {
   $('v-privacy').onclick = showPrivacy;
 }
 
+
+/* ---------- iPhone / iPad AR: Apple AR Quick Look with a USDZ snapshot of the current page ---------- */
+const quickLookOK = (() => { try { return document.createElement('a').relList.supports('ar'); } catch (e) { return false; } })();
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function stdMat(m, color) {
+  if (!m) return new THREE.MeshStandardMaterial({ color: '#ffffff' });
+  return new THREE.MeshStandardMaterial({ color: color || (m.color ? m.color.clone() : new THREE.Color('#ffffff')), map: m.map || null,
+    roughness: m.roughness ?? 0.6, metalness: m.metalness ?? 0, emissive: m.emissive ? m.emissive.clone() : new THREE.Color(0), emissiveIntensity: m.emissiveIntensity ?? 1,
+    transparent: !!m.transparent && (m.opacity ?? 1) < 0.99, opacity: m.opacity ?? 1, alphaTest: m.alphaTest || (m.map && m.transparent ? 0.3 : 0) });
+}
+// copy one mesh into export space (current pose for skinned meshes, baked transforms)
+function bakeMesh(o, rel, out) {
+  const src = o.geometry; const n = src.attributes.position.count;
+  const pos = new Float32Array(n * 3), v = new THREE.Vector3();
+  for (let i = 0; i < n; i++) { o.getVertexPosition(i, v); v.applyMatrix4(rel); pos.set([v.x, v.y, v.z], i * 3); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  if (src.attributes.uv) g.setAttribute('uv', src.attributes.uv.clone()); if (src.index) g.setIndex(src.index.clone());
+  const mats = Array.isArray(o.material) ? o.material : [o.material];
+  const col = src.attributes.color;
+  if (col && mats[0] && mats[0].vertexColors && !mats[0].map) { // split vertex-coloured meshes into flat colour pieces
+    const idx = src.index ? src.index.array : [...Array(n).keys()], buckets = new Map(), c = new THREE.Color();
+    for (let t = 0; t < idx.length; t += 3) { c.setRGB(0, 0, 0); for (let k = 0; k < 3; k++) { const j = idx[t + k]; c.r += col.getX(j) / 3; c.g += col.getY(j) / 3; c.b += col.getZ(j) / 3; }
+      const key = [c.r, c.g, c.b].map(x => Math.round(x * 4)).join(','); if (!buckets.has(key)) buckets.set(key, { c: c.clone(), list: [] }); buckets.get(key).list.push(idx[t], idx[t + 1], idx[t + 2]); }
+    for (const { c: bc, list } of buckets.values()) { // compact: keep only the vertices this colour piece uses
+      if (list.length < 9) continue;
+      const map = new Map(), P = [], I = [];
+      for (const j of list) { if (!map.has(j)) { map.set(j, map.size); P.push(pos[j * 3], pos[j * 3 + 1], pos[j * 3 + 2]); } I.push(map.get(j)); }
+      const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); gg.setIndex(I); gg.computeVertexNormals();
+      out.add(new THREE.Mesh(gg, stdMat(mats[0], bc))); }
+    return;
+  }
+  g.computeVertexNormals();
+  if (src.groups && src.groups.length && mats.length > 1) src.groups.forEach(gr => g.addGroup(gr.start, gr.count, gr.materialIndex));
+  out.add(new THREE.Mesh(g, mats.length > 1 ? mats.map(m => stdMat(m)) : stdMat(mats[0])));
+}
+async function buildUSDZ() {
+  const { USDZExporter } = await import('three/addons/exporters/USDZExporter.js');
+  const out = new THREE.Group(); book.updateMatrixWorld(true);
+  const toBook = new THREE.Matrix4().copy(book.matrixWorld).invert();
+  // the open spread (or the cover) as two flat pages on a purple board
+  const pageGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+  const addPage = (i, x) => { if (i < 0 || i >= N) return; const m = new THREE.Mesh(pageGeo, new THREE.MeshStandardMaterial({ map: tex(i), roughness: 0.85 })); m.position.set(x, 0.012, 0); out.add(m); };
+  const shift = cur === 0 ? 0.5 : cur === SHEETS ? -0.5 : 0;
+  if (cur === 0) addPage(0, 0.5); else if (cur === SHEETS) addPage(N - 1, -0.5); else { addPage(2 * cur - 1, -0.5); addPage(2 * cur, 0.5); }
+  const board = new THREE.Mesh(new THREE.BoxGeometry(cur === 0 || cur === SHEETS ? 1.03 : 2.06, 0.02, 1.04), new THREE.MeshStandardMaterial({ color: '#5a189a', roughness: 0.5 }));
+  board.position.set(cur === 0 ? 0.5 : cur === SHEETS ? -0.5 : 0, 0, 0); out.add(board);
+  // the pop-up scene: meshes plus labels turned into flat signs
+  if (active) {
+    active.host.updateMatrixWorld(true);
+    active.host.traverse(o => {
+      let vis = true; for (let p = o; p; p = p.parent) if (p.visible === false || p.userData.noExport) { vis = false; break; } if (!vis || o.isPoints || o.isLine) return;
+      const rel = new THREE.Matrix4().multiplyMatrices(toBook, o.matrixWorld);
+      if (o.isMesh && !o.isInstancedMesh) bakeMesh(o, rel, out);
+      else if (o.isSprite && o.material.map) { const p = new THREE.Vector3(), s = new THREE.Vector3(); rel.decompose(p, new THREE.Quaternion(), s);
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ map: o.material.map, transparent: true, alphaTest: 0.3, roughness: 0.8 })); m.position.copy(p); m.scale.set(s.x, s.y, 1); m.rotation.x = -0.35; out.add(m); }
+    });
+  }
+  const root = new THREE.Group(); out.position.x = -shift; out.scale.setScalar(1); root.add(out); root.scale.setScalar(0.16); // about 32 cm across for an open spread
+  root.updateMatrixWorld(true);
+  return await new USDZExporter().parse(root, { quickLookCompatible: true, ar: { anchoring: { type: 'plane' }, planeAnchoring: { alignment: 'horizontal' } } });
+}
+let qlURL = null;
+async function startQuickLook() {
+  if (!(await safetyGate('ar'))) return;
+  showSheet('Building your AR scene…', 'Packing this page and its pop-up for Apple AR. This takes a few seconds.');
+  try {
+    const data = await buildUSDZ();
+    if (qlURL) URL.revokeObjectURL(qlURL);
+    qlURL = URL.createObjectURL(new Blob([data], { type: 'model/vnd.usdz+zip' }));
+    const title = active ? EXPERIENCES[active.key].title : 'Nia & the Number Garden';
+    showSheet('Ready for AR', `Tap the picture to place <b>${title}</b> on a table or the floor. Pinch to resize and drag to move it.<br><br>
+      <a id="ql-link" rel="ar" href="${qlURL}" style="display:inline-block;border-radius:18px;overflow:hidden;border:4px solid #7b2cbf"><img src="pages/p-01.jpg" alt="Open in AR" style="width:180px;display:block"></a><br>
+      <small>Tip: AR Quick Look shows the scene as a still 3D model. To play the math games in your room, use Camera.</small>`);
+  } catch (e) { console.warn(e); showSheet('AR could not start', 'This device could not build the AR scene. Try Camera instead.'); }
+}
+
 /* ---------- in-AR media bar: videos, games, links, replay ---------- */
 const VIDEO = { cover: 'gate', welcome: 'gwenda', map: 'character', butterfly: 'flowers', gate: 'gate', friends: 'gate', bridge: 'flowers', carlo: 'count10',
   subby: 'snail', shapes: 'greenhouse', bloom: 'flowers', milly: 'moth', everywhere: 'character', pattern: 'flowers', measure: 'flowers', time: 'gwenda',
@@ -415,8 +491,8 @@ let video = null;
 function stopVideo() { if (video) { video.pause(); video.removeAttribute('src'); video.load(); video = null; } }
 function pageThumb(p) { const t = loader.load('pages/p-' + String(p).padStart(2, '0') + '.jpg'); t.colorSpace = THREE.SRGBColorSpace; return t; }
 function addMediaBar(host, key, spread) {
-  const bar = new THREE.Group(); bar.position.set(0, 1.2, -0.3); host.add(bar);
-  const panel = new THREE.Group(); host.add(panel); // video screen / game cards appear here
+  const bar = new THREE.Group(); bar.position.set(0, 1.2, -0.3); bar.userData.noExport = true; host.add(bar);
+  const panel = new THREE.Group(); panel.userData.noExport = true; host.add(panel); // video screen / game cards appear here
   const clearPanel = () => { stopVideo(); panel.clear(); };
   const btn = (txt, x, fn, bg = '#ffffff') => { const b = labelSprite(txt, bg); b.position.set(x, 0, 0); b.userData.onTap = () => { sfx.pop(); fn(); }; bar.add(b); return b; };
   const items = [];
@@ -563,7 +639,7 @@ function notSupported(kind, e) {
   const framed = window.top !== window.self;
   showSheet(kind === 'ar' ? 'AR needs a phone or headset' : 'VR needs a headset',
     (framed ? 'This preview runs inside a protected frame that blocks the camera and WebXR. Open the published book on your own site (niasnumbergarden.shop) to use it.<br><br>' : '') +
-    (kind === 'ar' ? 'Room-scale AR works in Chrome on Android and on Meta Quest. On iPhone, use <b>Camera</b> or <b>Scan my book</b> instead.' : 'VR works in the Meta Quest browser and other WebXR headsets.'));
+    (kind === 'ar' ? 'Room-scale AR works in Chrome on Android and on Meta Quest. On iPhone and iPad, open this page in <b>Safari</b> to use Apple AR, or use <b>Camera</b> or <b>Scan my book</b>.' : 'VR works in the Meta Quest browser and other WebXR headsets.'));
 }
 
 // Camera "magic window": the garden floats over the live camera (iPhone friendly)
@@ -651,7 +727,7 @@ $('games').onclick = async () => { if (!(await grownUpGate())) return; const all
   $('sheet-a').style.display = 'none';
   showSheet('Games & links', all.map(g => `<a class="go" style="margin:0 6px 8px 0" href="${g.url}" target="_blank" rel="noopener">${g.title}</a>`).join('') + '<br><small>Inside the book, tap Games or Links under any pop-up.</small>'); };
 $('bubble-x').onclick = () => { $('bubble').classList.remove('show'); stopSpeech(); };
-$('ar').onclick = () => { if (mode === 'xr') return xrSession.end(); startXR('ar'); };
+$('ar').onclick = () => { if (mode === 'xr') return xrSession.end(); if ($('ar').dataset.ok === 'true') return startXR('ar'); if (quickLookOK || isIOS) return startQuickLook(); startXR('ar'); };
 $('vr').onclick = () => { if (mode === 'xr') return xrSession.end(); startXR('vr'); };
 $('cam').onclick = () => mode === 'camera' ? stopCamera() : startCamera();
 $('scanbtn').onclick = () => mode === 'scan' ? stopScan() : startScan();
@@ -662,10 +738,10 @@ addEventListener('keydown', (e) => { if (e.key === 'ArrowRight') next(); if (e.k
   let ar = false, vr = false;
   try { if (navigator.xr) { ar = await navigator.xr.isSessionSupported('immersive-ar'); vr = await navigator.xr.isSessionSupported('immersive-vr'); } } catch (e) { }
   $('ar').dataset.ok = ar; $('vr').dataset.ok = vr;
-  if (!vr) $('vr').classList.add('dim'); if (!ar) $('ar').classList.add('dim');
+  if (!vr) $('vr').classList.add('dim'); if (!ar && !(quickLookOK || isIOS)) $('ar').classList.add('dim');
 })();
 
-window.__nia = { get active() { return active; }, setCur, camera, controls, renderer, scene };
+window.__nia = { get active() { return active; }, setCur, camera, controls, renderer, scene, buildUSDZ };
 /* ---------- loop ---------- */
 function resize() {
   const w = innerWidth, h = innerHeight; if (renderer.xr.isPresenting) return;

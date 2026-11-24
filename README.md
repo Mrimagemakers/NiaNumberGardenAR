@@ -21,7 +21,7 @@ A living 3D, AR and VR edition of *Nia & the Number Garden — Deluxe Edition* b
 ## Modes
 | Button | Works on |
 |---|---|
-| AR (place the book on a table) | Chrome on Android (ARCore), Meta Quest |
+| AR (place the book on a table) | Chrome on Android (ARCore), Meta Quest, and iPhone/iPad Safari via Apple AR Quick Look (a 3D snapshot of the current page and its pop-up) |
 | VR (garden world) | Meta Quest browser and other WebXR headsets |
 | Camera (pop-ups over the live camera) | iPhone, Android, laptops |
 | Scan my book (point at the printed cover or chapter pictures) | iPhone, Android |
