@@ -12,10 +12,16 @@ A living 3D, AR and VR edition of *Nia & the Number Garden — Deluxe Edition* b
 - **Nia's songs** ("Number Garden" and "Rocket Ship to Number Land") play softly in the background and dip under narration and videos.
 - **Follow & share**: social links and a share button. Add channel links in the `SOCIAL` list in `app.js`.
 
+## Settings, safety and privacy
+- **Sound & settings** (sliders icon): separate volume for all sound, music, voice and effects, plus reading speed. Saved on the device.
+- **Safety notices** before AR, VR and camera modes (supervision, clear space, breaks, flashing-effects caution, camera stays on device). Shown once per device.
+- **Grown-up check** (a quick multiplication question) before any button that leaves the book: games, store, social links.
+- **Privacy & safety** page: stars and settings are kept only in the browser's local storage; no ads, accounts, tracking or advertising cookies, or analytics; lists the third-party services (jsDelivr, Google Fonts, GitHub Pages) and has an "Erase saved stars and settings" button.
+
 ## Modes
 | Button | Works on |
 |---|---|
-| AR (place the book on a table) | Chrome on Android (ARCore), Meta Quest. On iPad and iPhone it opens the camera AR view below |
+| AR (place the book on a table) | Chrome on Android (ARCore), Meta Quest, and iPhone/iPad Safari via Apple AR Quick Look (a 3D snapshot of the current page and its pop-up) |
 | VR (garden world) | Meta Quest browser and other WebXR headsets |
 | Camera (pop-ups over the live camera; with motion allowed, the book stays put as you move the tablet; pinch to zoom, ◎ to re-center) | iPad, iPhone, Android, laptops |
 | Scan my book (point at the printed cover or chapter pictures) | iPhone, Android |

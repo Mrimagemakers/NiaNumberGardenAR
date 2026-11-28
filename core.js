@@ -606,10 +606,13 @@ export class FX {
 /* ---------- sound ---------- */
 let ac;
 function audio() { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } } if (ac.state === 'suspended' || ac.state === 'interrupted') ac.resume().catch(() => { }); return ac; }
-export const sound = { on: true };
+export const sound = { on: true, master: 0.8, music: 0.4, voice: 1, sfx: 0.7, rate: 0.95 };
+try { Object.assign(sound, JSON.parse(localStorage.getItem('nia-sound') || '{}')); } catch (e) { }
+export function saveSound() { try { localStorage.setItem('nia-sound', JSON.stringify({ master: sound.master, music: sound.music, voice: sound.voice, sfx: sound.sfx, rate: sound.rate, on: sound.on })); } catch (e) { } }
 function tone(freq, t0, dur, type = 'sine', vol = 0.18) {
   const a = audio(); if (!a || !sound.on) return;
   const o = a.createOscillator(), g = a.createGain(); o.type = type; o.frequency.value = freq;
+  vol *= sound.master * sound.sfx; if (vol <= 0.0005) return;
   g.gain.setValueAtTime(0, a.currentTime + t0); g.gain.linearRampToValueAtTime(vol, a.currentTime + t0 + 0.01);
   g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + t0 + dur);
   o.connect(g).connect(a.destination); o.start(a.currentTime + t0); o.stop(a.currentTime + t0 + dur + 0.05);
@@ -623,7 +626,7 @@ export const sfx = {
   good: () => { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.08, 0.3, 'triangle')); },
   oops: () => { tone(300, 0, 0.18, 'sine', 0.12); tone(240, 0.12, 0.22, 'sine', 0.12); },
   win: () => { [523, 659, 784, 659, 784, 1047, 1319].forEach((f, i) => tone(f, i * 0.11, 0.35, 'triangle', 0.16)); },
-  page: () => { const a = audio(); if (!a || !sound.on) return; const n = a.createBufferSource(), b = a.createBuffer(1, a.sampleRate * 0.25, a.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2) * 0.25; n.buffer = b; const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1800; n.connect(f).connect(a.destination); n.start(); },
+  page: () => { const a = audio(); if (!a || !sound.on) return; const n = a.createBufferSource(), b = a.createBuffer(1, a.sampleRate * 0.25, a.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2) * 0.25 * sound.master * sound.sfx; n.buffer = b; const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1800; n.connect(f).connect(a.destination); n.start(); },
   note: (i) => tone([523, 587, 659, 698, 784, 880, 988, 1047, 1175, 1319][i % 10], 0, 0.3, 'triangle', 0.15),
 };
 
@@ -639,7 +642,8 @@ export function speak(text, { rate = 0.95, pitch = 1.15, onend } = {}) {
     if (!sound.on || !window.speechSynthesis) { onend && onend(); return; }
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text.replace(/[✦★]/g, '').replace(/¢/g, ' cents').replace(/×/g, ' times ').replace(/−/g, ' minus ').replace(/÷/g, ' divided by '));
-    if (voice) u.voice = voice; u.rate = rate; u.pitch = pitch; if (onend) u.onend = onend;
+    if (voice) u.voice = voice; u.rate = rate * (sound.rate / 0.95); u.pitch = pitch; u.volume = Math.max(0, Math.min(1, sound.master * sound.voice)); if (onend) u.onend = onend;
+    if (u.volume === 0) { onend && onend(); return; }
     speechSynthesis.speak(u);
   } catch (e) { onend && onend(); }
 }
