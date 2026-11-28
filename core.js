@@ -605,7 +605,7 @@ export class FX {
 
 /* ---------- sound ---------- */
 let ac;
-function audio() { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } } if (ac.state === 'suspended') ac.resume(); return ac; }
+function audio() { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } } if (ac.state === 'suspended' || ac.state === 'interrupted') ac.resume().catch(() => { }); return ac; }
 export const sound = { on: true, master: 0.8, music: 0.4, voice: 1, sfx: 0.7, rate: 0.95 };
 try { Object.assign(sound, JSON.parse(localStorage.getItem('nia-sound') || '{}')); } catch (e) { }
 export function saveSound() { try { localStorage.setItem('nia-sound', JSON.stringify({ master: sound.master, music: sound.music, voice: sound.voice, sfx: sound.sfx, rate: sound.rate, on: sound.on })); } catch (e) { } }
@@ -618,7 +618,10 @@ function tone(freq, t0, dur, type = 'sine', vol = 0.18) {
   o.connect(g).connect(a.destination); o.start(a.currentTime + t0); o.stop(a.currentTime + t0 + dur + 0.05);
 }
 export const sfx = {
-  unlock: () => audio(),
+  unlock: () => { const a = audio(); // iPad needs a first sound and a first word inside a tap before it allows later ones
+    if (a && !sfx._primed) { sfx._primed = true; try { const b = a.createBuffer(1, 1, 22050), n = a.createBufferSource(); n.buffer = b; n.connect(a.destination); n.start(0); } catch (e) { }
+      try { if (window.speechSynthesis && !speechSynthesis.speaking) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } } catch (e) { } }
+    return a; },
   pop: () => tone(660, 0, 0.12, 'triangle', 0.15),
   good: () => { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.08, 0.3, 'triangle')); },
   oops: () => { tone(300, 0, 0.18, 'sine', 0.12); tone(240, 0.12, 0.22, 'sine', 0.12); },
